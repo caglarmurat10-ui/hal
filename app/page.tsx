@@ -314,7 +314,7 @@ export default function Home() {
                         type="date"
                         className="w-full bg-slate-800 border-slate-700 rounded-xl p-3 text-white outline-none focus:border-emerald-500 transition-colors"
                         value={formData.date}
-                        onChange={(e) => setFormData({ ...formData, date: event?.target['value'] })}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
