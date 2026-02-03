@@ -7,7 +7,7 @@ const DB_PATH = 'c:\\Users\\Savarona\\Documents\\hal\\hal-app\\data\\entries.jso
 // Hardcoded absolute path to prevent CWD resolution issues during dev
 const BACKUP_HTML_PATH = 'c:\\Users\\Savarona\\Documents\\Hal Takip.html'
 
-const DRIVE_URL = "https://script.google.com/macros/s/AKfycbyWyF1E8cpJGbQ1Bscsbt3b5sCtH-iZWbPoUC5dKuDGfR0qiMbT_RPCE68nlu6x8iak/exec";
+const DRIVE_URL = "https://script.google.com/macros/s/AKfycbz1juixEOJWvZHcqjEQ222L3jc6LpiHIKiP_TnObZifz_losMyNN776UVz_T2mMQ03j/exec";
 
 export async function getEntries() {
     if (!fs.existsSync(DB_PATH)) {
