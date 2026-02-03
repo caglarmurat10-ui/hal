@@ -96,14 +96,14 @@ export default function Home() {
 
         setSyncStatus("Hazır");
         setSyncStatusColor("text-emerald-500");
-        alert(`✅ Bulut verileri başarıyla indirildi. Toplam ${cloudEntries.length} kayıt.`);
+        alert(`✅ (TARAYICI MODU) Başarılı!\nVeri Kaynağı: Google Direkt\nKayıt Sayısı: ${cloudEntries.length}`);
       } else {
         throw new Error("Veri formatı hatalı.");
       }
     } catch (error: any) {
       console.error("Client Sync Error:", error);
 
-      // Fallback: Try Server Proxy if Client fails (e.g. CORS)
+      // Fallback: Try Server Proxy if Client fails
       try {
         console.log("Attempting Server Proxy Fallback...");
         const result = await syncFromCloud();
@@ -112,7 +112,7 @@ export default function Home() {
           calculateStats(result.data);
           setSyncStatus("Proxy Aktif");
           setSyncStatusColor("text-blue-400");
-          alert("✅ Bulut (Proxy) üzerinden güncellendi.");
+          alert(`✅ (SUNUCU MODU - PROXY)\nGoogle engeli aşıldı.\nKayıt Sayısı: ${result.data.length}\n*Veriler düzeltildi.`);
         } else {
           throw new Error(result.error);
         }
