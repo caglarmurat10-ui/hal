@@ -45,7 +45,9 @@ export default function Home() {
       // Google Scripts usually allow CORS if credentials are omitted
       // Client-Side Fetch (Mirroring simple HTML file behavior)
       // Google Scripts usually allow CORS if credentials are omitted
-      const response = await fetch(DRIVE_URL);
+      const response = await fetch(DRIVE_URL, {
+        referrerPolicy: "no-referrer" // Try to hide Vercel origin to avoid Google block
+      });
 
       // Check content type before parsing
       const contentType = response.headers.get("content-type");
