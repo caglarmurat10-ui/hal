@@ -25,7 +25,7 @@ function getSeason(dateStr: string) {
     const d = new Date(dateStr);
     const month = d.getMonth() + 1;
     const year = d.getFullYear();
-    if (month >= 11) {
+    if (month >= 9) {
         return `${year}/${year + 1}`;
     } else {
         return `${year - 1}/${year}`;
@@ -174,22 +174,8 @@ export async function saveEntry(formData: any) {
         }
     }
 
-    // 3. Post to Cloud
-    try {
-        await fetch(DRIVE_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                id: newEntry.id,
-                cin: newEntry.date,
-                nights: newEntry.quantity, // Mapping Quantity->nights
-                net: newEntry.netAmount,
-                received: newEntry.received || 0
-            })
-        })
-    } catch (e) {
-        console.error("Cloud Post Error", e)
-    }
+    // 3. Post to Cloud (REMOVED: Done Client-Side to avoid Bot Detection)
+    // Client (page.tsx) handles this via syncEntry()
 
     return { success: true, entry: newEntry }
 }

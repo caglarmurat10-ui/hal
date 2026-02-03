@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { saveEntry } from "@/app/actions"
 
-export default function EntryForm({ onEntryResult }: { onEntryResult?: () => void }) {
+export default function EntryForm({ onEntryResult }: { onEntryResult?: (entry: any) => void }) {
     // Set default date to today YYYY-MM-DD
     const [formData, setFormData] = React.useState({
         date: new Date().toISOString().split('T')[0],
@@ -43,7 +43,7 @@ export default function EntryForm({ onEntryResult }: { onEntryResult?: () => voi
         setLoading(true)
 
         try {
-            await saveEntry({
+            const result = await saveEntry({
                 ...formData,
                 quantity,
                 price,
@@ -65,8 +65,8 @@ export default function EntryForm({ onEntryResult }: { onEntryResult?: () => voi
                 product: "" // Keep supplier maybe?
             }))
 
-            alert("Kayıt Başarılı ve Yedeklendi!");
-            if (onEntryResult) onEntryResult();
+            alert("Kayıt Başarılı! (Bulut'a gönderiliyor...)");
+            if (onEntryResult && result.success) onEntryResult(result.entry);
         } catch (error) {
             console.error(error)
             alert("Hata oluştu!")
