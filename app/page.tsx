@@ -5,7 +5,7 @@ import { getEntries, saveCloudData } from "@/app/actions";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
-const DRIVE_URL = "https://script.google.com/macros/s/AKfycbzEW49QpT17jE2K-AryYIfXp98-i1WdZbR0gK5thfWNZ06bpqHfbjfvY7B0F76zoQUd/exec";
+const DRIVE_URL = "https://script.google.com/macros/s/AKfycbyWyF1E8cpJGbQ1Bscsbt3b5sCtH-iZWbPoUC5dKuDGfR0qiMbT_RPCE68nlu6x8iak/exec";
 
 export default function Home() {
   const [entries, setEntries] = useState<any[]>([]);
