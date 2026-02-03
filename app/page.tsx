@@ -69,7 +69,8 @@ export default function Home() {
     try {
       // Direct Fetch (Vercel Client IP -> Google)
       // Note: We use 'no-referrer' to try to mitigate Origin blocks
-      const response = await fetch(DRIVE_URL);
+      // Cache Busting: ?t=... ensure fresh data
+      const response = await fetch(DRIVE_URL + "?t=" + Date.now());
 
       if (!response.ok) throw new Error("Sunucu yanıt vermedi");
 
@@ -202,12 +203,18 @@ export default function Home() {
                 <span className={`w-2 h-2 rounded-full ${syncStatusColor.replace('text-', 'bg-')}`}></span> {syncStatus}
               </span>
             </div>
-            {/* DEBUG BUTTON: High Visibility */}
+            {/* DEBUG BUTTON: Check Raw Response Text */}
             <button
-              onClick={() => alert(`RAW DATA SAMPLE (First Item):\n${JSON.stringify(entries[0] || "No Data", null, 2)}`)}
-              className="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded w-full border-2 border-white shadow-xl animate-pulse"
+              onClick={async () => {
+                try {
+                  const res = await fetch(DRIVE_URL + "?t=" + Date.now());
+                  const txt = await res.text();
+                  alert("RAW RESPONSE:\n" + txt.substring(0, 500));
+                } catch (e) { alert("Debug Error: " + e); }
+              }}
+              className="mt-4 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full border-2 border-white shadow-xl"
             >
-              🚨 VERİ KONTROL (DEBUG 3) 🚨
+              🔍 BAĞLANTIYI TEST ET (RAW)
             </button>
           </div>
 
