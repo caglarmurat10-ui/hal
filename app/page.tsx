@@ -327,6 +327,7 @@ export default function Home() {
                           value={formData.kilo}
                           onChange={(e) => setFormData({ ...formData, kilo: e.target.value })}
                           onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                          autoComplete="off"
                         />         </div>
                       <div className="space-y-1">
                         <label className="text-xs font-bold text-slate-400 ml-1">Birim Fiyat</label>
@@ -337,6 +338,7 @@ export default function Home() {
                           value={formData.price}
                           onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                           onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                          autoComplete="off"
                         />
                       </div>
                     </div>
