@@ -26,9 +26,12 @@ export default function Home() {
   };
 
   // Initial Load & Refresh from Server (for local saving workflow)
+  // Note: getEntries() returns raw JSON file content.
+  // If we wanted to enforce the same mapping here we could, but let's assume local JSON is already clean.
   useEffect(() => {
     getEntries().then(data => {
       if (Array.isArray(data)) {
+        // Ensure data matches expectations (optional)
         setEntries(data);
         calculateStats(data);
       }
