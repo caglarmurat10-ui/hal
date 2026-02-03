@@ -71,7 +71,8 @@ export default function RecentEntries({ entries, onDelete, onEdit }: RecentEntri
                                     </button>
                                     <button
                                         onClick={() => onDelete && onDelete(item.id)}
-                                        className="text-rose-500 hover:text-rose-400 opacity-70 hover:opacity-100"
+                                        className="text-rose-500 hover:text-rose-400 text-lg opacity-100 px-2"
+                                        title="Sil"
                                     >
                                         🗑️
                                     </button>
