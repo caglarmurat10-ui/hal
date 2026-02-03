@@ -15,9 +15,10 @@ import { getEntries } from "@/app/actions"
 interface RecentEntriesProps {
     entries: any[];
     onDelete?: (id: string) => void;
+    onEdit?: (id: string) => void;
 }
 
-export default function RecentEntries({ entries, onDelete }: RecentEntriesProps) {
+export default function RecentEntries({ entries, onDelete, onEdit }: RecentEntriesProps) {
     // Component now depends on parent state, simplifying logic and fixing Vercel sync issue by using client-side data directly.
     const data = entries || [];
 

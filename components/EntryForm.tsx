@@ -6,17 +6,17 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { saveEntry } from "@/app/actions"
 
-export default function EntryForm({ onEntryResult }: { onEntryResult?: (entry: any) => void }) {
+export default function EntryForm({ onEntryResult, initialData }: { onEntryResult?: (entry: any) => void, initialData?: any }) {
     // Set default date to today YYYY-MM-DD
     const [formData, setFormData] = React.useState({
-        date: new Date().toISOString().split('T')[0],
-        product: "",
-        supplier: "",
-        quantity: "", // Kg
-        price: "",
-        commissionRate: "10", // %
-        laborCost: "", // Hamaliye
-        transportCost: "", // Nakliye
+        date: initialData?.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+        product: initialData?.product || "",
+        supplier: initialData?.supplier || "",
+        quantity: initialData?.quantity?.toString() || "",
+        price: initialData?.price?.toString() || "",
+        commissionRate: initialData?.commissionRate?.toString() || "10",
+        laborCost: initialData?.laborCost?.toString() || "",
+        transportCost: initialData?.transportCost?.toString() || "",
     })
     const [loading, setLoading] = React.useState(false)
 
@@ -45,6 +45,7 @@ export default function EntryForm({ onEntryResult }: { onEntryResult?: (entry: a
         try {
             const result = await saveEntry({
                 ...formData,
+                id: initialData?.id, // Preserve ID if editing
                 quantity,
                 price,
                 grossAmount,
@@ -54,18 +55,20 @@ export default function EntryForm({ onEntryResult }: { onEntryResult?: (entry: a
                 stopaj,
                 rusum,
                 netAmount,
-                received: 0 // Default 0 for backup compatibility
+                received: initialData?.received || 0 // Preserve received amount
             })
 
-            // Reset form (keep supplier/date maybe? Resetting quantity/product usually better)
-            setFormData(prev => ({
-                ...prev,
-                quantity: "",
-                price: "",
-                product: "" // Keep supplier maybe?
-            }))
+            // Reset only if creating new (not editing)
+            if (!initialData) {
+                setFormData(prev => ({
+                    ...prev,
+                    quantity: "",
+                    price: "",
+                    product: ""
+                }))
+            }
 
-            alert("Kayıt Başarılı! (Bulut'a gönderiliyor...)");
+            alert(initialData ? "Güncelleme Başarılı!" : "Kayıt Başarılı! (Bulut'a gönderiliyor...)");
             if (onEntryResult && result.success) onEntryResult(result.entry);
         } catch (error) {
             console.error(error)
@@ -78,7 +81,7 @@ export default function EntryForm({ onEntryResult }: { onEntryResult?: (entry: a
     return (
         <Card className="w-full">
             <CardHeader>
-                <CardTitle>Yeni Mal Girişi</CardTitle>
+                <CardTitle>{initialData ? "Kaydı Düzenle" : "Yeni Mal Girişi"}</CardTitle>
             </CardHeader>
             <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">

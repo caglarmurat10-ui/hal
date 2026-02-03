@@ -19,7 +19,9 @@ export default function Home() {
   const [syncStatus, setSyncStatus] = useState("Hazır");
   const [syncStatusColor, setSyncStatusColor] = useState("text-emerald-500");
 
-  // Load Settings from LocalStorage on Mount
+  const [editingEntry, setEditingEntry] = useState<any>(null);
+
+  // Load Settings from LocalStorage on Mount AND Sync
   useEffect(() => {
     const savedConfig = localStorage.getItem('hal_config');
     if (savedConfig) {
@@ -28,6 +30,8 @@ export default function Home() {
         if (config.commission) setCommission(config.commission);
       } catch (e) { }
     }
+    // Auto-Fetch on mount
+    handleCloudSync();
   }, []);
 
   const saveSettings = () => {
@@ -51,15 +55,6 @@ export default function Home() {
     });
   };
 
-  useEffect(() => {
-    getEntries().then(data => {
-      if (Array.isArray(data)) {
-        setEntries(data);
-        calculateStats(data);
-      }
-    })
-  }, []);
-
   // --- CLIENT SIDE SYNC (EXACT MATCH TO HTML V6.1) ---
   const handleCloudSync = async () => {
     setSyncing(true);
@@ -81,23 +76,25 @@ export default function Home() {
           id: String(item.id),
           date: String(item.date).split('T')[0],
           season: item.season || getSeason(item.date),
-          product: "Genel Ürün", // Default
+          product: "Genel Ürün", // Default - In V6 this is not stored, but we display generic
           supplier: "Bulut Kaydı", // Default
           quantity: parseFloat(item.kilo) || 0,
           price: 0,
           grossAmount: 0,
           netAmount: parseFloat(item.net) || 0,
           received: parseFloat(item.received) || 0,
-          commission: 0, labor: 0, transport: 0, stopaj: 0, rusum: 0
+          commission: 0, labor: 0, transport: 0, stopaj: 0, rusum: 0,
+          // If available in cloud response (custom logic), map it, else defaults
+          commissionRate: commission
         }));
 
         setEntries(cloudEntries);
         calculateStats(cloudEntries);
         saveCloudData(cloudEntries).catch(() => { }); // Backup
 
-        setSyncStatus("Hazır");
+        setSyncStatus("Yedekle / Yenile"); // User requested "Yedekle"
         setSyncStatusColor("text-emerald-500");
-        alert(`✅ (TARAYICI MODU) Başarılı!\nVeri Kaynağı: Google Direkt\nKayıt Sayısı: ${cloudEntries.length}`);
+        // alert(`✅ (TARAYICI MODU) Başarılı!\nVeri Kaynağı: Google Direkt\nKayıt Sayısı: ${cloudEntries.length}`); // Removed alert to be less intrusive on auto-load
       } else {
         throw new Error("Veri formatı hatalı.");
       }
@@ -111,16 +108,16 @@ export default function Home() {
         if (result.success && result.data) {
           setEntries(result.data);
           calculateStats(result.data);
-          setSyncStatus("Proxy Aktif");
+          setSyncStatus("Proxy Yedek");
           setSyncStatusColor("text-blue-400");
-          alert(`✅ (SUNUCU MODU - PROXY)\nGoogle engeli aşıldı.\nKayıt Sayısı: ${result.data.length}\n*Veriler düzeltildi.`);
+          // alert(`✅ (SUNUCU MODU - PROXY)\nGoogle engeli aşıldı.\nKayıt Sayısı: ${result.data.length}\n*Veriler düzeltildi.`);
         } else {
           throw new Error(result.error);
         }
       } catch (proxyError: any) {
         setSyncStatus("Hata");
         setSyncStatusColor("text-rose-500");
-        alert(`❌ Bağlantı Hatası: ${error.message}\nProxy Hatası: ${proxyError.message}`);
+        // alert(`❌ Bağlantı Hatası: ${error.message}\nProxy Hatası: ${proxyError.message}`);
       }
     } finally {
       setSyncing(false);
@@ -148,7 +145,7 @@ export default function Home() {
       setSyncStatus("Kaydedildi ✅");
       setSyncStatusColor("text-emerald-500");
       setTimeout(() => {
-        setSyncStatus("Hazır");
+        setSyncStatus("Yedekle / Yenile");
         handleCloudSync();
       }, 1000);
     } catch (e) {
@@ -159,8 +156,16 @@ export default function Home() {
   };
 
   const handleEntryResult = (newEntry: any) => {
-    // 1. Update Local State Immediately
-    const updated = [...entries, newEntry];
+    // 1. Update Local State Immediately (Optimistic)
+    // If editing, replace. If new, add.
+    const exists = entries.find(e => e.id === newEntry.id);
+    let updated;
+    if (exists) {
+      updated = entries.map(e => e.id === newEntry.id ? newEntry : e);
+    } else {
+      updated = [...entries, newEntry];
+    }
+
     setEntries(updated);
     calculateStats(updated);
 
@@ -169,6 +174,15 @@ export default function Home() {
 
     // 3. Close Form
     setShowEntryForm(false);
+    setEditingEntry(null);
+  };
+
+  const handleEdit = (id: string) => {
+    const entry = entries.find(e => e.id === id);
+    if (entry) {
+      setEditingEntry(entry);
+      setShowEntryForm(true);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -180,7 +194,6 @@ export default function Home() {
     calculateStats(updated);
 
     // 2. Cloud Update (Action: Delete)
-    // Replicating Hal Takip.html: action='delete', zeros for values
     setSyncStatus("Siliniyor...");
     setSyncStatusColor("text-rose-400");
 
@@ -198,8 +211,8 @@ export default function Home() {
       });
       setSyncStatus("Silindi 🗑️");
       setTimeout(() => {
-        setSyncStatus("Hazır");
-        handleCloudSync(); // Re-sync to be safe
+        setSyncStatus("Yedekle / Yenile");
+        handleCloudSync();
       }, 1000);
     } catch (e) {
       console.error("Delete Error:", e);
@@ -239,19 +252,6 @@ export default function Home() {
                 <span className={`w-2 h-2 rounded-full ${syncStatusColor.replace('text-', 'bg-')}`}></span> {syncStatus}
               </span>
             </div>
-            {/* DEBUG BUTTON: Check Raw Response Text */}
-            <button
-              onClick={async () => {
-                try {
-                  const res = await fetch(DRIVE_URL + "?t=" + Date.now());
-                  const txt = await res.text();
-                  alert("RAW RESPONSE:\n" + txt.substring(0, 500));
-                } catch (e) { alert("Debug Error: " + e); }
-              }}
-              className="mt-4 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full border-2 border-white shadow-xl"
-            >
-              🔍 BAĞLANTIYI TEST ET (RAW)
-            </button>
           </div>
 
           <button onClick={() => setShowSettings(true)} className="bg-slate-800/80 p-2 rounded-xl border border-slate-700 text-slate-400 hover:text-white">
@@ -277,7 +277,7 @@ export default function Home() {
 
       {/* Buttons */}
       <div className="flex gap-3 mb-6">
-        <Button onClick={() => setShowEntryForm(!showEntryForm)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 py-6 text-sm font-bold shadow-lg uppercase italic text-white rounded-xl">
+        <Button onClick={() => { setShowEntryForm(!showEntryForm); setEditingEntry(null); }} className="flex-1 bg-emerald-600 hover:bg-emerald-700 py-6 text-sm font-bold shadow-lg uppercase italic text-white rounded-xl">
           {showEntryForm ? "Listeye Dön" : "✚ Satış Ekle"}
         </Button>
         <Button className="flex-1 bg-blue-600 hover:bg-blue-700 py-6 text-sm font-bold shadow-lg uppercase italic text-white rounded-xl">
@@ -289,12 +289,11 @@ export default function Home() {
       <div className="glass-card overflow-hidden">
         {showEntryForm ? (
           <div className="p-4">
-            <h2 className="text-emerald-400 font-bold mb-4 uppercase italic">Yeni İşlem</h2>
-            {/* Pass onEntryResult to handle sync after save */}
-            <EntryForm onEntryResult={handleEntryResult} />
+            {/* Pass onEntryResult and initialData (if editing) */}
+            <EntryForm onEntryResult={handleEntryResult} initialData={editingEntry} />
           </div>
         ) : (
-          <RecentEntries entries={entries} onDelete={handleDelete} />
+          <RecentEntries entries={entries} onDelete={handleDelete} onEdit={handleEdit} />
         )}
       </div>
     </div>
