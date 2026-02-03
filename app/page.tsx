@@ -43,10 +43,9 @@ export default function Home() {
     try {
       // Client-Side Fetch (Mirroring simple HTML file behavior)
       // Google Scripts usually allow CORS if credentials are omitted
-      const response = await fetch(DRIVE_URL, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-      });
+      // Client-Side Fetch (Mirroring simple HTML file behavior)
+      // Google Scripts usually allow CORS if credentials are omitted
+      const response = await fetch(DRIVE_URL);
 
       // Check content type before parsing
       const contentType = response.headers.get("content-type");
