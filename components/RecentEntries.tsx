@@ -14,9 +14,10 @@ import { getEntries } from "@/app/actions"
 
 interface RecentEntriesProps {
     entries: any[];
+    onDelete?: (id: string) => void;
 }
 
-export default function RecentEntries({ entries }: RecentEntriesProps) {
+export default function RecentEntries({ entries, onDelete }: RecentEntriesProps) {
     // Component now depends on parent state, simplifying logic and fixing Vercel sync issue by using client-side data directly.
     const data = entries || [];
 
@@ -61,7 +62,13 @@ export default function RecentEntries({ entries }: RecentEntriesProps) {
                                     <div className="text-[9px] text-rose-400">Kalan: {((parseFloat(item.netAmount) || 0) - (parseFloat(item.received) || 0)).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</div>
                                 </td>
                                 <td className="p-4 text-center">
-                                    <button className="text-blue-400 hover:text-blue-300">✎</button>
+                                    <button className="text-blue-400 hover:text-blue-300 mr-2">✎</button>
+                                    <button
+                                        onClick={() => onDelete && onDelete(item.id)}
+                                        className="text-rose-500 hover:text-rose-400 opacity-70 hover:opacity-100"
+                                    >
+                                        🗑️
+                                    </button>
                                 </td>
                             </tr>
                         ))}

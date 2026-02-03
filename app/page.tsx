@@ -171,6 +171,42 @@ export default function Home() {
     setShowEntryForm(false);
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm("Bu kaydı silmek istediğinize emin misiniz?")) return;
+
+    // 1. Local Update
+    const updated = entries.filter(e => e.id !== id);
+    setEntries(updated);
+    calculateStats(updated);
+
+    // 2. Cloud Update (Action: Delete)
+    // Replicating Hal Takip.html: action='delete', zeros for values
+    setSyncStatus("Siliniyor...");
+    setSyncStatusColor("text-rose-400");
+
+    try {
+      await fetch(DRIVE_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify({
+          id: id,
+          kilo: 0,
+          received: 0,
+          net: 0,
+          action: 'delete'
+        })
+      });
+      setSyncStatus("Silindi 🗑️");
+      setTimeout(() => {
+        setSyncStatus("Hazır");
+        handleCloudSync(); // Re-sync to be safe
+      }, 1000);
+    } catch (e) {
+      console.error("Delete Error:", e);
+      setSyncStatus("Hata ⚠️");
+    }
+  };
+
   return (
     <div className="max-w-md mx-auto sm:max-w-2xl md:max-w-5xl">
       {/* Settings Modal */}
@@ -258,7 +294,7 @@ export default function Home() {
             <EntryForm onEntryResult={handleEntryResult} />
           </div>
         ) : (
-          <RecentEntries entries={entries} />
+          <RecentEntries entries={entries} onDelete={handleDelete} />
         )}
       </div>
     </div>
