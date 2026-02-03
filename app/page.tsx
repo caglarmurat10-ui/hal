@@ -57,41 +57,28 @@ export default function Home() {
       const data = await response.json();
 
       if (Array.isArray(data)) {
-        const cloudEntries = data.map((r: any) => {
-          let id, date, quantity, net, recv;
+        const cloudEntries = data.map((x: any) => {
+          // Logic directly from Hal Takip.html:
+          // "const r = Object.values(x);" handles both array and object responses generally.
+          const r = typeof x === 'object' ? Object.values(x) : x;
 
-          if (Array.isArray(r)) {
-            // Array format: [id, date, kilo, ?, net, received]
-            id = r[0];
-            date = r[1];
-            quantity = r[2];
-            net = r[3];
-            recv = r[4];
-          } else if (typeof r === 'object' && r !== null) {
-            id = r.id;
-            date = r.date || r.cin;
-            quantity = r.kilo || r.nights || r.quantity;
-            net = r.net || r.netAmount;
-            recv = r.received;
-          } else {
-            const vals = Object.values(r);
-            id = vals[0];
-            date = vals[1];
-            quantity = vals[2];
-            net = vals[3];
-            recv = vals[4];
-          }
+          // Mapping indices from HTML (lines 114-119):
+          // r[0]: id
+          // r[1]: date
+          // r[2]: kilo (quantity)
+          // r[4]: net (netAmount) -- SKIPPING r[3]
+          // r[5]: received
 
           return {
-            id: String(id),
-            date: String(date).split('T')[0],
+            id: String(r[0]),
+            date: String(r[1]).split('T')[0],
             product: "Genel Ürün",
             supplier: "Bulut Kaydı",
-            quantity: parseFloat(quantity) || 0,
+            quantity: parseFloat(r[2]) || 0,
             price: 0,
             grossAmount: 0,
-            netAmount: parseFloat(net) || 0,
-            received: parseFloat(recv) || 0,
+            netAmount: parseFloat(r[4]) || 0, // CORRECTED INDEX
+            received: parseFloat(r[5]) || 0,  // CORRECTED INDEX
             commission: 0,
             labor: 0,
             transport: 0,
@@ -103,10 +90,10 @@ export default function Home() {
         setEntries(cloudEntries);
         calculateStats(cloudEntries);
 
-        // Fire-and-forget backup to server (fails on Vercel but fine for local)
+        // Fire-and-forget backup
         saveCloudData(cloudEntries).catch(e => console.log("Backup skip"));
 
-        alert(`Bulut verileri başarıyla indirildi. Toplam ${cloudEntries.length} kayıt.`);
+        alert(`Bulut verileri başarıyla indirildi. Toplam ${cloudEntries.length} kayıt. (Hal Takip v5 Modu)`);
       } else {
         alert("Buluttan gelen veri formatı hatalı.");
       }
