@@ -210,7 +210,7 @@ export default function Home() {
           <div>
             <h1 className="text-2xl font-bold text-emerald-400 tracking-tight">
               Hal <span className="text-white">Takip</span>
-              <span className="text-[10px] bg-rose-900 text-white px-2 py-1 rounded ml-1 animate-pulse">v7.1 YENİ</span>
+              <span className="text-[10px] bg-sky-900 text-sky-200 px-2 py-1 rounded ml-1">v7.2 MOBİL</span>
             </h1>
             <div onClick={syncWithCloud} className="mt-1 flex items-center gap-2 cursor-pointer">
               <span className={`w-2 h-2 rounded-full ${syncColor}`}></span>
