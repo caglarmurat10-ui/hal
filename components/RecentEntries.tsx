@@ -63,7 +63,12 @@ export default function RecentEntries({ entries, onDelete, onEdit }: RecentEntri
                                     <div className="text-[9px] text-rose-400">Kalan: {((parseFloat(item.netAmount) || 0) - (parseFloat(item.received) || 0)).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</div>
                                 </td>
                                 <td className="p-4 text-center">
-                                    <button className="text-blue-400 hover:text-blue-300 mr-2">✎</button>
+                                    <button
+                                        onClick={() => onEdit && onEdit(item.id)}
+                                        className="text-blue-400 hover:text-blue-300 mr-2"
+                                    >
+                                        ✎
+                                    </button>
                                     <button
                                         onClick={() => onDelete && onDelete(item.id)}
                                         className="text-rose-500 hover:text-rose-400 opacity-70 hover:opacity-100"
