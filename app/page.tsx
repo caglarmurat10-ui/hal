@@ -1,7 +1,7 @@
 "use client"
 import EntryForm from "@/components/EntryForm";
 import RecentEntries from "@/components/RecentEntries";
-import { getEntries, saveCloudData } from "@/app/actions";
+import { getEntries, syncFromCloud } from "@/app/actions";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -38,73 +38,19 @@ export default function Home() {
   const handleCloudSync = async () => {
     setSyncing(true);
     try {
-      // Client-Side Fetch to match Hal Takip.html behavior
-      const response = await fetch(DRIVE_URL);
-      const data = await response.json();
+      // Use Server Action Proxy (bypasses CORS & Google Bot Detection)
+      const result = await syncFromCloud();
 
-      if (Array.isArray(data)) {
-        const cloudEntries = data.map((r: any) => {
-          let id, date, quantity, net, recv;
-
-          if (Array.isArray(r)) {
-            // Array format: [id, date, kilo, ?, net, received]
-            id = r[0];
-            date = r[1];
-            quantity = r[2];
-            net = r[3];
-            recv = r[4];
-          } else if (typeof r === 'object' && r !== null) {
-            // Object format matching HTML script logic
-            id = r.id;
-            date = r.date || r.cin;
-            quantity = r.kilo || r.nights || r.quantity;
-            net = r.net || r.netAmount;
-            recv = r.received;
-          } else {
-            // Fallback
-            const vals = Object.values(r);
-            id = vals[0];
-            date = vals[1];
-            quantity = vals[2];
-            net = vals[3];
-            recv = vals[4];
-          }
-
-          return {
-            id: String(id),
-            date: String(date).split('T')[0],
-            product: "Genel Ürün",
-            supplier: "Bulut Kaydı",
-            quantity: parseFloat(quantity) || 0,
-            price: 0,
-            grossAmount: 0,
-            netAmount: parseFloat(net) || 0,
-            received: parseFloat(recv) || 0,
-            commission: 0,
-            labor: 0,
-            transport: 0,
-            stopaj: 0,
-            rusum: 0
-          }
-        }).filter((e: any) => (parseFloat(e.quantity) > 0 || parseFloat(e.netAmount) > 0));
-
-        // CRITICAL FOR VERCEL: Update Client State Immediately
-        // Do NOT rely on the server round-trip for Vercel, as file writes are ephemeral.
-        setEntries(cloudEntries);
-        calculateStats(cloudEntries);
-
-        // Still try to save via Server Action for local dev persistence
-        try {
-          await saveCloudData(cloudEntries);
-        } catch (err) { console.warn("Background save failed (expected on Vercel)", err); }
-
-        alert(`Bulut verileri başarıyla indirildi. Toplam ${cloudEntries.length} kayıt.`);
+      if (result.success && result.data) {
+        setEntries(result.data);
+        calculateStats(result.data);
+        alert(`Bulut verileri başarıyla indirildi. Toplam ${result.count || 0} kayıt.`);
       } else {
-        alert("Buluttan gelen veri formatı hatalı.");
+        alert("Hata: " + (result.error || "Bilinmeyen hata"));
       }
     } catch (error) {
-      console.error("Client Sync Error:", error);
-      alert("Bulut bağlantısı sağlanamadı. Lütfen internet bağlantınızı kontrol edin.");
+      console.error(error);
+      alert("Bağlantı hatası.");
     } finally {
       setSyncing(false);
     }

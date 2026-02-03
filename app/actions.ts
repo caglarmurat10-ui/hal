@@ -34,7 +34,13 @@ function getSeason(dateStr: string) {
 
 export async function syncFromCloud() {
     try {
-        const response = await fetch(DRIVE_URL, { cache: 'no-store' });
+        const response = await fetch(DRIVE_URL, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json",
+            },
+            cache: 'no-store'
+        });
         const data = await response.json();
 
         if (Array.isArray(data)) {
@@ -89,13 +95,16 @@ export async function syncFromCloud() {
             }).filter(e => e.quantity > 0 || e.netAmount > 0);
 
             // Rewrite local DB with cloud data (Master source)
-            fs.writeFileSync(DB_PATH, JSON.stringify(cloudEntries, null, 2))
-            return { success: true, count: cloudEntries.length }
+            try {
+                fs.writeFileSync(DB_PATH, JSON.stringify(cloudEntries, null, 2))
+            } catch (e) { console.log("FS Write failed (expected on Vercel)"); }
+
+            return { success: true, count: cloudEntries.length, data: cloudEntries }
         }
         return { success: false, error: "Invalid data format" }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Cloud Sync Error:", error)
-        return { success: false, error: "Connection Failed" }
+        return { success: false, error: error.message || "Connection Failed" }
     }
 }
 
