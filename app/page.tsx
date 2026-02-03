@@ -30,8 +30,11 @@ export default function Home() {
         if (config.commission) setCommission(config.commission);
       } catch (e) { }
     }
-    // Auto-Fetch on mount
-    handleCloudSync();
+    // Auto-Fetch on mount (Delayed to ensure hydration)
+    const timer = setTimeout(() => {
+      handleCloudSync();
+    }, 1000);
+    return () => clearTimeout(timer);
   }, []);
 
   const saveSettings = () => {
@@ -246,7 +249,7 @@ export default function Home() {
       <div className="glass-card p-6 mb-6">
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-emerald-400 tracking-tight">Hal <span className="text-white">Takip</span></h1>
+            <h1 className="text-2xl font-bold text-emerald-400 tracking-tight">Hal <span className="text-white">Takip</span> <span className="text-[10px] bg-slate-800 text-slate-500 px-1 rounded ml-1">v6.3</span></h1>
             <div onClick={handleCloudSync} className="cursor-pointer flex items-center gap-2 mt-1">
               <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 ${syncStatusColor}`}>
                 <span className={`w-2 h-2 rounded-full ${syncStatusColor.replace('text-', 'bg-')}`}></span> {syncStatus}
