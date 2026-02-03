@@ -240,6 +240,22 @@ export default function Home() {
           </div>
         </div>
 
+        {/* SEASON COMPARISON */}
+        <div className="flex gap-4 overflow-x-auto no-scrollbar mb-6 pb-2">
+          {[...Array.from(new Set(entries.map(e => e.season)))].sort().reverse().map(s => {
+            const sData = entries.filter(e => e.season === s);
+            const sNet = sData.reduce((a, b) => a + b.net, 0);
+            const sKilo = sData.reduce((a, b) => a + b.kilo, 0);
+            return (
+              <div key={s} className="min-w-[150px] glass-card p-4 border-l-4 border-emerald-500 bg-emerald-500/5 italic relative flex-shrink-0">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">{s} Sezonu</p>
+                <p className="text-sm font-bold text-white">₺{sNet.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</p>
+                <p className="text-[10px] text-emerald-400/80 font-bold">{sKilo.toLocaleString()} kg Satış</p>
+              </div>
+            );
+          })}
+        </div>
+
         {/* ACTION BUTTONS */}
         <div className="flex gap-3 mb-6">
           <button
