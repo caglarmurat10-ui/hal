@@ -326,8 +326,8 @@ export default function Home() {
                           placeholder="kg"
                           value={formData.kilo}
                           onChange={(e) => setFormData({ ...formData, kilo: e.target.value })}
-                        />
-                      </div>
+                          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                        />         </div>
                       <div className="space-y-1">
                         <label className="text-xs font-bold text-slate-400 ml-1">Birim Fiyat</label>
                         <input
@@ -336,10 +336,10 @@ export default function Home() {
                           placeholder="₺"
                           value={formData.price}
                           onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
                         />
                       </div>
                     </div>
-                    <p className="text-[10px] text-slate-500 text-center italic mt-2">* {commission}% Komisyon otomatik düşülecektir.</p>
                   </>
                 )}
 
