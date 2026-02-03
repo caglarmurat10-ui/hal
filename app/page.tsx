@@ -210,7 +210,7 @@ export default function Home() {
           <div>
             <h1 className="text-2xl font-bold text-emerald-400 tracking-tight">
               Hal <span className="text-white">Takip</span>
-              <span className="text-[10px] bg-slate-800 text-slate-500 px-1 rounded ml-1">v7.0</span>
+              <span className="text-[10px] bg-rose-900 text-white px-2 py-1 rounded ml-1 animate-pulse">v7.1 YENİ</span>
             </h1>
             <div onClick={syncWithCloud} className="mt-1 flex items-center gap-2 cursor-pointer">
               <span className={`w-2 h-2 rounded-full ${syncColor}`}></span>
@@ -308,10 +308,14 @@ export default function Home() {
               <div className="space-y-4">
                 {(modalMode === 'sale' || modalMode === 'edit') && (
                   <>
+                    <h3 className="text-center text-emerald-400 font-bold mb-4 tracking-widest uppercase">
+                      {modalMode === 'sale' ? '⚡ HIZLI SATIŞ ⚡' : 'KAYIT DÜZENLE'}
+                    </h3>
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-slate-400 ml-1">Tarih</label>
                       <input
                         type="date"
+                        name="date_new_v1"
                         className="w-full bg-slate-800 border-slate-700 rounded-xl p-3 text-white outline-none focus:border-emerald-500 transition-colors"
                         value={formData.date}
                         onChange={(e) => setFormData({ ...formData, date: e.target.value })}
@@ -322,6 +326,7 @@ export default function Home() {
                         <label className="text-xs font-bold text-slate-400 ml-1">Kilo</label>
                         <input
                           type="number"
+                          name="kilo_new_v1"
                           className="w-full bg-slate-800 border-slate-700 rounded-xl p-3 text-white outline-none focus:border-emerald-500 transition-colors"
                           placeholder="kg"
                           value={formData.kilo}
@@ -333,6 +338,7 @@ export default function Home() {
                         <label className="text-xs font-bold text-slate-400 ml-1">Birim Fiyat</label>
                         <input
                           type="number"
+                          name="price_new_v1"
                           className="w-full bg-slate-800 border-slate-700 rounded-xl p-3 text-white outline-none focus:border-emerald-500 transition-colors"
                           placeholder="₺"
                           value={formData.price}
