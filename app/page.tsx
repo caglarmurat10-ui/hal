@@ -8,23 +8,30 @@ import { Button } from "@/components/ui/button";
 const DRIVE_URL = "https://script.google.com/macros/s/AKfycbzEW49QpT17jE2K-AryYIfXp98-i1WdZbR0gK5thfWNZ06bpqHfbjfvY7B0F76zoQUd/exec";
 
 export default function Home() {
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [entries, setEntries] = useState<any[]>([]);
   const [stats, setStats] = useState({ net: 0, received: 0, debt: 0 });
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // Kept for EntryForm re-fetches if needed
 
+  // Function to calculate stats from an array of entries
+  const calculateStats = (data: any[]) => {
+    const net = data.reduce((acc: number, curr: any) => acc + (parseFloat(curr.netAmount) || 0), 0);
+    const received = data.reduce((acc: number, curr: any) => acc + (parseFloat(curr.received) || 0), 0);
+    setStats({
+      net,
+      received,
+      debt: net - received
+    });
+  };
+
+  // Initial Load & Refresh from Server (for local saving workflow)
   useEffect(() => {
     getEntries().then(data => {
-      const net = data.reduce((acc: number, curr: any) => acc + (parseFloat(curr.netAmount) || 0), 0);
-      // Assuming we will implement 'received' logic later properly, for now reading what we have.
-      // In the HTML file, payment is separate. Here we default to 0 for received if not present.
-      const received = data.reduce((acc: number, curr: any) => acc + (parseFloat(curr.received) || 0), 0);
-
-      setStats({
-        net,
-        received,
-        debt: net - received
-      })
+      if (Array.isArray(data)) {
+        setEntries(data);
+        calculateStats(data);
+      }
     })
   }, [refreshKey]);
 
@@ -44,7 +51,7 @@ export default function Home() {
             id = r[0];
             date = r[1];
             quantity = r[2];
-            net = r[3]; // Re-verified index: Kilo=2, Net=3, Recv=4 based on Sheet
+            net = r[3];
             recv = r[4];
           } else if (typeof r === 'object' && r !== null) {
             // Object format matching HTML script logic
@@ -81,8 +88,16 @@ export default function Home() {
           }
         }).filter((e: any) => (parseFloat(e.quantity) > 0 || parseFloat(e.netAmount) > 0));
 
-        // Save the fetched data via Server Action
-        await saveCloudData(cloudEntries);
+        // CRITICAL FOR VERCEL: Update Client State Immediately
+        // Do NOT rely on the server round-trip for Vercel, as file writes are ephemeral.
+        setEntries(cloudEntries);
+        calculateStats(cloudEntries);
+
+        // Still try to save via Server Action for local dev persistence
+        try {
+          await saveCloudData(cloudEntries);
+        } catch (err) { console.warn("Background save failed (expected on Vercel)", err); }
+
         alert(`Bulut verileri başarıyla indirildi. Toplam ${cloudEntries.length} kayıt.`);
       } else {
         alert("Buluttan gelen veri formatı hatalı.");
@@ -91,7 +106,6 @@ export default function Home() {
       console.error("Client Sync Error:", error);
       alert("Bulut bağlantısı sağlanamadı. Lütfen internet bağlantınızı kontrol edin.");
     } finally {
-      setRefreshKey(k => k + 1);
       setSyncing(false);
     }
   };
@@ -143,7 +157,7 @@ export default function Home() {
             <EntryForm onEntryResult={() => { setRefreshKey(k => k + 1); setShowEntryForm(false); }} />
           </div>
         ) : (
-          <RecentEntries key={refreshKey} />
+          <RecentEntries entries={entries} />
         )}
       </div>
     </div>

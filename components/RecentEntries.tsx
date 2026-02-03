@@ -12,12 +12,13 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { getEntries } from "@/app/actions"
 
-export default function RecentEntries() {
-    const [data, setData] = useState<any[]>([])
+interface RecentEntriesProps {
+    entries: any[];
+}
 
-    useEffect(() => {
-        getEntries().then(setData)
-    }, [])
+export default function RecentEntries({ entries }: RecentEntriesProps) {
+    // Component now depends on parent state, simplifying logic and fixing Vercel sync issue by using client-side data directly.
+    const data = entries || [];
 
     return (
         <Card className="h-full">
