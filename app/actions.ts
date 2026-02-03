@@ -61,26 +61,25 @@ export async function syncFromCloud() {
             const data = JSON.parse(text);
 
             if (Array.isArray(data)) {
-                // Map Data (Using Hal Takip v5 Indices: 0,1,2,4,5)
+                // Map Cloud Data (V6.1 Object-Based)
                 const cloudEntries = data.map((x: any) => {
-                    const r = typeof x === 'object' ? Object.values(x) : x;
                     return {
-                        id: String(r[0]),
-                        date: String(r[1]).split('T')[0],
+                        id: String(x.id),
+                        date: String(x.date).split('T')[0],
                         product: "Genel Ürün",
                         supplier: "Bulut Kaydı",
-                        quantity: parseFloat(r[2]) || 0,
+                        quantity: parseFloat(x.kilo) || 0,
                         price: 0,
                         grossAmount: 0,
-                        netAmount: parseFloat(r[4]) || 0,
-                        received: parseFloat(r[5]) || 0,
+                        netAmount: parseFloat(x.net) || 0,
+                        received: parseFloat(x.received) || 0,
                         commission: 0,
                         labor: 0,
                         transport: 0,
                         stopaj: 0,
                         rusum: 0
                     }
-                }).filter((e: any) => (parseFloat(e.quantity) > 0 || parseFloat(e.netAmount) > 0));
+                }).filter((e: any) => (parseFloat(e.quantity) > 0 || parseFloat(e.netAmount) > 0 || parseFloat(e.received) > 0)); // Keeping logic loose to show data
 
                 // Save to local disk (Optional/Fails on Vercel)
                 try {
