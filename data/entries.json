@@ -1,0 +1,21 @@
+[
+    {
+        "id": "1738573200000",
+        "date": "2026-02-03",
+        "product": "Domates",
+        "supplier": "Örnek Müstahsil",
+        "quantity": 500,
+        "price": 25,
+        "grossAmount": 12500,
+        "commission": 1250,
+        "labor": 200,
+        "transport": 300,
+        "stopaj": 250,
+        "rusum": 125,
+        "netAmount": 10375,
+        "received": 0,
+        "commissionRate": "10",
+        "laborCost": "200",
+        "transportCost": "300"
+    }
+]
