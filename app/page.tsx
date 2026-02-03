@@ -202,6 +202,13 @@ export default function Home() {
                 <span className={`w-2 h-2 rounded-full ${syncStatusColor.replace('text-', 'bg-')}`}></span> {syncStatus}
               </span>
             </div>
+            {/* DEBUG BUTTON: Only visible if entries exist or for testing */}
+            <button
+              onClick={() => alert(`RAW DATA SAMPLE (First Item):\n${JSON.stringify(entries[0] || "No Data", null, 2)}`)}
+              className="mt-2 text-[8px] text-slate-600 underline hover:text-slate-400"
+            >
+              VERİ KONTROL (DEBUG 2)
+            </button>
           </div>
 
           <button onClick={() => setShowSettings(true)} className="bg-slate-800/80 p-2 rounded-xl border border-slate-700 text-slate-400 hover:text-white">
