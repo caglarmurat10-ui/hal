@@ -40,70 +40,77 @@ export default function Home() {
 
   const handleCloudSync = async () => {
     setSyncing(true);
-    try {
-      // Client-Side Fetch (Mirroring simple HTML file behavior)
-      // Google Scripts usually allow CORS if credentials are omitted
-      // Client-Side Fetch (Mirroring simple HTML file behavior)
-      // Google Scripts usually allow CORS if credentials are omitted
-      const response = await fetch(DRIVE_URL, {
-        referrerPolicy: "no-referrer" // Try to hide Vercel origin to avoid Google block
-      });
+    let clientError = "";
 
-      // Check content type before parsing
+    // --- STRATEGY 1: CLIENT-SIDE FETCH (Preferred for Local) ---
+    try {
+      // Trying simplest fetch first (no-referrer, no headers)
+      const response = await fetch(DRIVE_URL, { referrerPolicy: "no-referrer" });
       const contentType = response.headers.get("content-type");
+
       if (contentType && contentType.includes("text/html")) {
-        throw new Error("Google, isteğe HTML ile yanıt verdi. (CORS veya Oturum Sorunu)");
+        throw new Error("Client: Google HTML yanıtı döndü (Oturum/CORS engeli).");
       }
+
+      if (!response.ok) throw new Error("Client: HTTP " + response.status);
 
       const data = await response.json();
-
       if (Array.isArray(data)) {
-        const cloudEntries = data.map((x: any) => {
-          // Logic directly from Hal Takip.html:
-          // "const r = Object.values(x);" handles both array and object responses generally.
-          const r = typeof x === 'object' ? Object.values(x) : x;
-
-          // Mapping indices from HTML (lines 114-119):
-          // r[0]: id
-          // r[1]: date
-          // r[2]: kilo (quantity)
-          // r[4]: net (netAmount) -- SKIPPING r[3]
-          // r[5]: received
-
-          return {
-            id: String(r[0]),
-            date: String(r[1]).split('T')[0],
-            product: "Genel Ürün",
-            supplier: "Bulut Kaydı",
-            quantity: parseFloat(r[2]) || 0,
-            price: 0,
-            grossAmount: 0,
-            netAmount: parseFloat(r[4]) || 0, // CORRECTED INDEX
-            received: parseFloat(r[5]) || 0,  // CORRECTED INDEX
-            commission: 0,
-            labor: 0,
-            transport: 0,
-            stopaj: 0,
-            rusum: 0
-          }
-        }).filter((e: any) => (parseFloat(e.quantity) > 0 || parseFloat(e.netAmount) > 0));
-
-        setEntries(cloudEntries);
-        calculateStats(cloudEntries);
-
-        // Fire-and-forget backup
-        saveCloudData(cloudEntries).catch(e => console.log("Backup skip"));
-
-        alert(`Bulut verileri başarıyla indirildi. Toplam ${cloudEntries.length} kayıt. (Hal Takip v5 Modu)`);
+        updateStateWithData(data);
+        return; // Success! Exit.
       } else {
-        alert("Buluttan gelen veri formatı hatalı.");
+        throw new Error("Client: Veri formatı bozuk.");
       }
     } catch (error: any) {
-      console.error("Client Sync Error:", error);
-      alert("Bulut bağlantısı sağlanamadı. Lütfen daha sonra tekrar deneyin.\nDetay: " + (error.message || error));
+      console.warn("Client Sync Failed, trying Server Proxy...", error);
+      clientError = error.message || String(error);
+    }
+
+    // --- STRATEGY 2: SERVER-SIDE PROXY (Preferred for Vercel/CORS issues) ---
+    try {
+      const result = await syncFromCloud();
+      if (result.success && result.data) {
+        setEntries(result.data);
+        calculateStats(result.data);
+        alert(`✅ Bulut verileri başarıyla indirildi via PROXY. Toplam ${result.count || 0} kayıt.`);
+        return; // Success!
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (serverError: any) {
+      console.error("Server Sync Failed", serverError);
+      alert(`❌ BULUT EŞLEŞTİRME BAŞARISIZ\n\n1. Deneme (Tarayıcı): ${clientError}\n2. Deneme (Sunucu): ${serverError.message || serverError}\n\nLütfen Google Script izinlerinizi 'Anyone/Herkes' olarak kontrol edin.`);
     } finally {
       setSyncing(false);
     }
+  };
+
+  const updateStateWithData = (data: any[]) => {
+    // Reusable mapping logic
+    const cloudEntries = data.map((x: any) => {
+      const r = typeof x === 'object' ? Object.values(x) : x;
+      return {
+        id: String(r[0]),
+        date: String(r[1]).split('T')[0],
+        product: "Genel Ürün",
+        supplier: "Bulut Kaydı",
+        quantity: parseFloat(r[2]) || 0,
+        price: 0,
+        grossAmount: 0,
+        netAmount: parseFloat(r[4]) || 0,
+        received: parseFloat(r[5]) || 0,
+        commission: 0, labor: 0, transport: 0, stopaj: 0, rusum: 0
+      }
+    }).filter((e: any) => (parseFloat(e.quantity) > 0 || parseFloat(e.netAmount) > 0));
+
+    setEntries(cloudEntries);
+    calculateStats(cloudEntries);
+
+    // Fire-and-forget backup
+    saveCloudData(cloudEntries).catch(() => { });
+
+    alert(`✅ Bulut verileri başarıyla indirildi. Toplam ${cloudEntries.length} kayıt. (Tarayıcı Modu)`);
+    setSyncing(false);
   };
 
   return (

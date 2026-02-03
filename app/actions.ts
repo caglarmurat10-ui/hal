@@ -34,77 +34,70 @@ function getSeason(dateStr: string) {
 
 export async function syncFromCloud() {
     try {
+        // Server-Side Proxy with Browser Masquerading
         const response = await fetch(DRIVE_URL, {
             headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "application/json",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Referer": "https://script.google.com/"
             },
             cache: 'no-store'
         });
-        const data = await response.json();
 
-        if (Array.isArray(data)) {
-            // Map Cloud Data (Array) to Local Schema
-            // Cloud: [id, date, kilo, ?, net, received, ...] (Based on HTML analysis)
-            // HTML line 112: r[0]=id, r[1]=date, r[2]=kilo, r[4]=net, r[5]=received
+        const contentType = response.headers.get("content-type");
+        const text = await response.text();
 
-            const cloudEntries = data.map((r: any) => {
-                // The Sheet likely returns an array of objects or arrays. 
-                // HTML code uses Object.values(x) which implies x is an object {id:..., date:...} or similar.
-                // Let's assume the API returns array of objects like the HTML implies.
-                // Actually HTML lines: const r = Object.values(x);
-                // If the Google Script returns array of objects, Object.values transforms them to array. 
-                // We should try to be robust. 
-
-                // If the response is already arrays? 
-                // Let's trust the HTML logic: Object.values(x) suggests x is an object.
-                const vals = typeof r === 'object' ? Object.values(r) : r;
-
-                // Mapping based on HTML:
-                // r[0]: id
-                // r[1]: date
-                // r[2]: kilo
-                // r[3]: ? (maybe product?)
-                // r[4]: net
-                // r[5]: received
-
-                // We need to map this to our local schema:
-                // { id, date, product, supplier, quantity, price, netAmount, ... }
-
-                // Since we miss 'Supplier' and 'Product' in these columns (based on HTML usage), 
-                // we will have to provide defaults or try to infer.
-                // The HTML doesn't show where Supplier name comes from in the cloud columns. 
-                // Wait, let's look at HTML again. 
-
-                return {
-                    id: String(vals[0]),
-                    date: String(vals[1]).split('T')[0], // Clean date
-                    product: "Genel Ürün", // Default as Sheet might not have it or it's in a different col
-                    supplier: "Bulut Kaydı",
-                    quantity: parseFloat(vals[2] as string) || 0,
-                    price: 0, // Calculated?
-                    grossAmount: 0,
-                    netAmount: parseFloat(vals[4] as string) || 0,
-                    received: parseFloat(vals[5] as string) || 0,
-                    commission: 0,
-                    labor: 0,
-                    transport: 0,
-                    stopaj: 0,
-                    rusum: 0
-                }
-            }).filter(e => e.quantity > 0 || e.netAmount > 0);
-
-            // Rewrite local DB with cloud data (Master source)
-            try {
-                fs.writeFileSync(DB_PATH, JSON.stringify(cloudEntries, null, 2))
-            } catch (e) { console.log("FS Write failed (expected on Vercel)"); }
-
-            return { success: true, count: cloudEntries.length, data: cloudEntries }
+        // Check if response is HTML (Bot Detection / Auth Page)
+        if (contentType && contentType.includes("text/html")) {
+            // Extract Page Title or Body to define error
+            const match = text.match(/<title>(.*?)<\/title>/i) || text.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+            const errorContent = match ? match[1].substring(0, 100).replace(/<[^>]*>?/gm, "") : text.substring(0, 100);
+            console.error("Google Script HTML Response:", errorContent);
+            return { success: false, error: "Google Sunucu Yanıtı (HTML): " + errorContent.trim() };
         }
-        return { success: false, error: "Invalid data format" }
+
+        try {
+            const data = JSON.parse(text);
+
+            if (Array.isArray(data)) {
+                // Map Data (Using Hal Takip v5 Indices: 0,1,2,4,5)
+                const cloudEntries = data.map((x: any) => {
+                    const r = typeof x === 'object' ? Object.values(x) : x;
+                    return {
+                        id: String(r[0]),
+                        date: String(r[1]).split('T')[0],
+                        product: "Genel Ürün",
+                        supplier: "Bulut Kaydı",
+                        quantity: parseFloat(r[2]) || 0,
+                        price: 0,
+                        grossAmount: 0,
+                        netAmount: parseFloat(r[4]) || 0,
+                        received: parseFloat(r[5]) || 0,
+                        commission: 0,
+                        labor: 0,
+                        transport: 0,
+                        stopaj: 0,
+                        rusum: 0
+                    }
+                }).filter((e: any) => (parseFloat(e.quantity) > 0 || parseFloat(e.netAmount) > 0));
+
+                // Save to local disk (Optional/Fails on Vercel)
+                try {
+                    fs.writeFileSync(DB_PATH, JSON.stringify(cloudEntries, null, 2))
+                } catch (e) { }
+
+                return { success: true, count: cloudEntries.length, data: cloudEntries }
+            }
+            return { success: false, error: "Beklenmeyen Veri Formatı (Dizi değil)" }
+
+        } catch (jsonError) {
+            return { success: false, error: "JSON Ayrıştırma Hatası: " + text.substring(0, 50) }
+        }
+
     } catch (error: any) {
         console.error("Cloud Sync Error:", error)
-        return { success: false, error: error.message || "Connection Failed" }
+        return { success: false, error: "Sunucu Bağlantı Hatası: " + (error.message || "") }
     }
 }
 
