@@ -1,7 +1,7 @@
 "use client"
 import EntryForm from "@/components/EntryForm";
 import RecentEntries from "@/components/RecentEntries";
-import { getEntries, saveCloudData } from "@/app/actions";
+import { getEntries, saveCloudData, syncFromCloud } from "@/app/actions";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
