@@ -1,7 +1,7 @@
 "use client"
 import EntryForm from "@/components/EntryForm";
 import RecentEntries from "@/components/RecentEntries";
-import { getEntries, syncFromCloud } from "@/app/actions";
+import { getEntries, saveCloudData } from "@/app/actions";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -12,7 +12,7 @@ export default function Home() {
   const [stats, setStats] = useState({ net: 0, received: 0, debt: 0 });
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0); // Kept for EntryForm re-fetches if needed
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Function to calculate stats from an array of entries
   const calculateStats = (data: any[]) => {
@@ -38,19 +38,78 @@ export default function Home() {
   const handleCloudSync = async () => {
     setSyncing(true);
     try {
-      // Use Server Action Proxy (bypasses CORS & Google Bot Detection)
-      const result = await syncFromCloud();
+      // Client-Side Fetch (Mirroring simple HTML file behavior)
+      // Google Scripts usually allow CORS if credentials are omitted
+      const response = await fetch(DRIVE_URL, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
 
-      if (result.success && result.data) {
-        setEntries(result.data);
-        calculateStats(result.data);
-        alert(`Bulut verileri başarıyla indirildi. Toplam ${result.count || 0} kayıt.`);
-      } else {
-        alert("Hata: " + (result.error || "Bilinmeyen hata"));
+      // Check content type before parsing
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("text/html")) {
+        throw new Error("Google, isteğe HTML ile yanıt verdi. (CORS veya Oturum Sorunu)");
       }
-    } catch (error) {
-      console.error(error);
-      alert("Bağlantı hatası.");
+
+      const data = await response.json();
+
+      if (Array.isArray(data)) {
+        const cloudEntries = data.map((r: any) => {
+          let id, date, quantity, net, recv;
+
+          if (Array.isArray(r)) {
+            // Array format: [id, date, kilo, ?, net, received]
+            id = r[0];
+            date = r[1];
+            quantity = r[2];
+            net = r[3];
+            recv = r[4];
+          } else if (typeof r === 'object' && r !== null) {
+            id = r.id;
+            date = r.date || r.cin;
+            quantity = r.kilo || r.nights || r.quantity;
+            net = r.net || r.netAmount;
+            recv = r.received;
+          } else {
+            const vals = Object.values(r);
+            id = vals[0];
+            date = vals[1];
+            quantity = vals[2];
+            net = vals[3];
+            recv = vals[4];
+          }
+
+          return {
+            id: String(id),
+            date: String(date).split('T')[0],
+            product: "Genel Ürün",
+            supplier: "Bulut Kaydı",
+            quantity: parseFloat(quantity) || 0,
+            price: 0,
+            grossAmount: 0,
+            netAmount: parseFloat(net) || 0,
+            received: parseFloat(recv) || 0,
+            commission: 0,
+            labor: 0,
+            transport: 0,
+            stopaj: 0,
+            rusum: 0
+          }
+        }).filter((e: any) => (parseFloat(e.quantity) > 0 || parseFloat(e.netAmount) > 0));
+
+        setEntries(cloudEntries);
+        calculateStats(cloudEntries);
+
+        // Fire-and-forget backup to server (fails on Vercel but fine for local)
+        saveCloudData(cloudEntries).catch(e => console.log("Backup skip"));
+
+        alert(`Bulut verileri başarıyla indirildi. Toplam ${cloudEntries.length} kayıt.`);
+      } else {
+        alert("Buluttan gelen veri formatı hatalı.");
+      }
+    } catch (error: any) {
+      console.error("Client Sync Error:", error);
+      alert("Bulut bağlantısı sağlanamadı. Lütfen daha sonra tekrar deneyin.\nDetay: " + (error.message || error));
     } finally {
       setSyncing(false);
     }
