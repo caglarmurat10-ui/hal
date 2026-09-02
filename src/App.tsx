@@ -4,7 +4,6 @@ import type { AppState, PendingOperation, Sale } from "./types";
 import SeasonAnalysis from "./SeasonAnalysis";
 
 const emptyState: AppState = { sales: [], payments: [], commissionRate: 8, serverTime: "" };
-const LEGACY_URL = "https://script.google.com/macros/s/AKfycbz1juixEOJWvZHcqjEQ222L3jc6LpiHIKiP_TnObZifz_losMyNN776UVz_T2mMQ03j/exec";
 type Modal = "sale" | "payment" | "settings" | null;
 type Status = "online" | "offline" | "syncing" | "auth";
 
@@ -21,39 +20,6 @@ function seasonOf(date: string): string | null {
 function money(n: number) { return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(n || 0); }
 function number(n: number, digits = 0) { return new Intl.NumberFormat("tr-TR", { maximumFractionDigits: digits }).format(n || 0); }
 function newId() { return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
-function legacyDate(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) return new Date(Date.UTC(1899, 11, 30) + value * 86_400_000).toISOString().slice(0, 10);
-  return String(value || "").split("T")[0];
-}
-function normalizeLegacy(records: unknown[], rate: number) {
-  let sourceReceived = 0;
-  const sales: Sale[] = [];
-  for (const raw of records) {
-    if (!raw || typeof raw !== "object") continue;
-    const x = raw as Record<string, unknown>;
-    const date = legacyDate(x.date);
-    const season = seasonOf(date);
-    const kilo = Number(x.kilo ?? x.quantity) || 0;
-    const net = Number(x.net ?? x.netAmount) || 0;
-    const received = Math.max(0, Number(x.received) || 0);
-    if (!season || kilo <= 0 || net <= 0) continue;
-    sourceReceived += received;
-    const commissionRate = Math.min(30, Math.max(0, Number(x.commissionRate ?? rate) || rate));
-    const gross = net / (1 - commissionRate / 100);
-    sales.push({
-      id: String(x.id || newId()), date, season, kilo, unitPrice: gross / kilo, gross,
-      commissionRate, net, received: 0
-    });
-  }
-  let remaining = Math.min(sourceReceived, sales.reduce((sum, sale) => sum + sale.net, 0));
-  for (const sale of [...sales].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))) {
-    const take = Math.min(sale.net, remaining);
-    sale.received = take;
-    remaining -= take;
-    if (remaining <= 0.001) break;
-  }
-  return { sales, sourceReceived };
-}
 
 export default function App() {
   const [state, setState] = useState<AppState>(() => readCachedState() || emptyState);
@@ -164,30 +130,6 @@ export default function App() {
   function exportJson() { download(`hal-takip-${today()}.json`, new Blob([JSON.stringify(state, null, 2)], { type: "application/json" })); }
   function download(name: string, blob: Blob) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 500); }
 
-  async function importLegacy() {
-    const localPreview = !getApiConfig().baseUrl;
-    if (!confirm(localPreview ? "Eski Google HAL kayıtları bu tarayıcıdaki TEST önizlemesine yüklensin mi? Gerçek Cloudflare verisi değişmeyecek." : "Eski Google HAL kayıtları Cloudflare veritabanına içe aktarılsın mı?")) return;
-    setNotice("Eski HAL kayıtları okunuyor...");
-    try {
-      if (localPreview) {
-        const response = await fetch(`${LEGACY_URL}?t=${Date.now()}`);
-        if (!response.ok) throw new Error(`Eski veri sunucusu ${response.status} yanıtı verdi.`);
-        const records = await response.json() as unknown;
-        if (!Array.isArray(records)) throw new Error("Eski veri beklenmeyen formatta.");
-        const normalized = normalizeLegacy(records, state.commissionRate);
-        const next: AppState = { ...state, sales: normalized.sales, payments: [], serverTime: "preview" };
-        persistQueue([]);
-        persist(next);
-        setSeasonFilter("all");
-        setNotice(`${normalized.sales.length} eski kayıt TEST önizlemesine yüklendi. Toplam tahsilat ${money(normalized.sourceReceived)} korunarak FIFO ile düzeltildi.`);
-        return;
-      }
-      const result = await api.importLegacyFromCloud();
-      setNotice(`${result.imported} kayıt Cloudflare'a içe aktarıldı.`);
-      await sync();
-    } catch (e) { setNotice(`İçe aktarma başarısız: ${e instanceof Error ? e.message : "Bilinmeyen hata"}`); }
-  }
-
   return (
     <main className="app-shell">
       <header className="topbar"><div><div className="brand-row"><h1>HAL <span>Takip</span></h1><span className="version">v8 Cloudflare</span></div><button className={`sync-pill ${status}`} onClick={sync}><i /> {previewMode ? "Test önizleme modu" : status === "online" ? `Senkron ${lastSync || "hazır"}` : status === "syncing" ? "Güncelleniyor" : status === "auth" ? "Sunucu anahtarı gerekli" : `Çevrimdışı${queue.length ? ` · ${queue.length} bekleyen` : ""}`}</button></div><button className="icon-button" onClick={() => setModal("settings")} aria-label="Ayarlar">⚙</button></header>
@@ -200,16 +142,16 @@ export default function App() {
       <SeasonAnalysis sales={state.sales} seasons={seasons} seasonFilter={seasonFilter} onSelectSeason={setSeasonFilter} />
       <section className="actions"><button className="primary" onClick={() => { setEditing(null); setModal("sale"); }}>＋ Satış Ekle</button><button className="secondary" disabled={totals.debt <= 0} onClick={() => setModal("payment")}>₺ Tahsilat Al</button></section>
 
-      <section className="panel"><div className="panel-head"><div><h2>İşlemler</h2><p>{filtered.length} kayıt · {previewMode ? "test verisi" : queue.length ? `${queue.length} senkron bekliyor` : "tümü güncel"}</p></div><div className="filters"><select value={seasonFilter} onChange={e => setSeasonFilter(e.target.value)}><option value="all">Tüm sezonlar</option>{seasons.map(s => <option key={s}>{s}</option>)}</select><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Ara" /></div></div>
+      <section className="panel"><div className="panel-head"><div><h2>İşlemler</h2><p>{filtered.length} kayıt · {previewMode ? "temiz test alanı" : queue.length ? `${queue.length} senkron bekliyor` : "tümü güncel"}</p></div><div className="filters"><select value={seasonFilter} onChange={e => setSeasonFilter(e.target.value)}><option value="all">Tüm sezonlar</option>{seasons.map(s => <option key={s}>{s}</option>)}</select><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Ara" /></div></div>
         <div className="desktop-table"><table><thead><tr><th>Tarih</th><th>Sezon</th><th>Kilo</th><th>Fiyat</th><th>Net</th><th>Tahsilat</th><th>Kalan</th><th /></tr></thead><tbody>{filtered.map(x => <tr key={x.id}><td>{new Date(`${x.date}T12:00:00`).toLocaleDateString("tr-TR")}</td><td><span className="tag">{x.season}</span></td><td>{number(x.kilo,1)} kg</td><td>{money(x.unitPrice)}</td><td className="good">{money(x.net)}</td><td>{money(x.received)}</td><td className={x.net-x.received>1?"bad":"muted"}>{money(x.net-x.received)}</td><td className="row-actions"><button onClick={()=>editSale(x)}>✎</button><button onClick={()=>deleteSale(x)}>⌫</button></td></tr>)}</tbody></table></div>
         <div className="mobile-list">{filtered.map(x => <article className="sale-card" key={x.id}><div><b>{new Date(`${x.date}T12:00:00`).toLocaleDateString("tr-TR")}</b><span className="tag">{x.season}</span></div><div className="sale-main"><strong>{number(x.kilo,1)} kg</strong><strong className="good">{money(x.net)}</strong></div><div className="sale-sub"><span>{money(x.unitPrice)}/kg</span><span className={x.net-x.received>1?"bad":"muted"}>Kalan {money(x.net-x.received)}</span></div><div className="card-actions"><button onClick={()=>editSale(x)}>Düzenle</button><button onClick={()=>deleteSale(x)}>Sil</button></div></article>)}</div>
-        {!filtered.length && <div className="empty">Henüz kayıt yok.</div>}
+        {!filtered.length && <div className="empty">Henüz kayıt yok. Yeni sezon verilerini sıfırdan ekleyebilirsin.</div>}
       </section>
       <footer>HAL Takip v8 · Kasım-Haziran sezonu · Cloudflare D1</footer>
 
       {modal === "sale" && <SaleModal sale={editing} commissionRate={state.commissionRate} onClose={() => { setModal(null); setEditing(null); }} onSave={saveSale} />}
       {modal === "payment" && <PaymentModal debt={totals.debt} onClose={() => setModal(null)} onSave={addPayment} />}
-      {modal === "settings" && <SettingsModal previewMode={previewMode} commissionRate={state.commissionRate} onClose={() => setModal(null)} onSave={async (rate,base,key) => { saveApiConfig(base,key); const next={...state,commissionRate:rate}; persist(next); setModal(null); await enqueue({id:newId(),type:"settings",payload:{commissionRate:rate}},next); }} onCsv={exportCsv} onJson={exportJson} onImport={importLegacy} />}
+      {modal === "settings" && <SettingsModal commissionRate={state.commissionRate} onClose={() => setModal(null)} onSave={async (rate,base,key) => { saveApiConfig(base,key); const next={...state,commissionRate:rate}; persist(next); setModal(null); await enqueue({id:newId(),type:"settings",payload:{commissionRate:rate}},next); }} onCsv={exportCsv} onJson={exportJson} />}
     </main>
   );
 }
@@ -221,4 +163,4 @@ function SaleModal({ sale, commissionRate, onClose, onSave }: { sale: Sale | nul
   return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><form className="modal" onSubmit={e=>{e.preventDefault(); if(Number(kilo)>0&&Number(price)>0)onSave({date,kilo:Number(kilo),unitPrice:Number(price)});}}><div className="modal-title"><div><small>{sale?"KAYIT DÜZENLE":"YENİ SATIŞ"}</small><h3>{season || "Üretim dışı dönem"}</h3></div><button type="button" onClick={onClose}>×</button></div><label>Tarih<input type="date" value={date} onChange={e=>setDate(e.target.value)} required /></label>{!season && <div className="banner warning"><span>Üretim sezonu Kasım-Haziran arasındadır.</span></div>}<div className="two"><label>Kilo<input inputMode="decimal" value={kilo} onChange={e=>setKilo(e.target.value)} placeholder="0" required /></label><label>Birim fiyat<input inputMode="decimal" value={price} onChange={e=>setPrice(e.target.value)} placeholder="₺" required /></label></div><div className="calc"><span>Brüt <b>{money(gross)}</b></span><span>Komisyon %{commissionRate} <b>-{money(gross*commissionRate/100)}</b></span><strong>Net {money(net)}</strong></div><button className="primary full" type="submit" disabled={!season}>{sale?"Değişiklikleri Kaydet":"Satışı Kaydet"}</button></form></div>;
 }
 function PaymentModal({debt,onClose,onSave}:{debt:number;onClose:()=>void;onSave:(amount:number,date:string)=>void}) { const [amount,setAmount]=useState(""); const [date,setDate]=useState(today()); return <div className="modal-backdrop"><form className="modal" onSubmit={e=>{e.preventDefault();onSave(Number(amount),date);}}><div className="modal-title"><div><small>TAHSİLAT</small><h3>Kalan {money(debt)}</h3></div><button type="button" onClick={onClose}>×</button></div><label>Tarih<input type="date" value={date} onChange={e=>setDate(e.target.value)} /></label><label>Tahsil edilen tutar<input autoFocus inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="₺ 0" /></label><button type="button" className="ghost full" onClick={()=>setAmount(debt.toFixed(2))}>Kalanın tamamı</button><button className="secondary full" type="submit">Tahsilatı Kaydet</button></form></div>; }
-function SettingsModal({previewMode,commissionRate,onClose,onSave,onCsv,onJson,onImport}:{previewMode:boolean;commissionRate:number;onClose:()=>void;onSave:(r:number,b:string,k:string)=>void;onCsv:()=>void;onJson:()=>void;onImport:()=>void}) { const cfg=getApiConfig(); const [rate,setRate]=useState(commissionRate.toString()); const [base,setBase]=useState(cfg.baseUrl); const [key,setKey]=useState(cfg.apiKey); return <div className="modal-backdrop"><div className="modal settings"><div className="modal-title"><div><small>AYARLAR</small><h3>HAL Takip v8</h3></div><button onClick={onClose}>×</button></div><label>Komisyon oranı (%)<input inputMode="decimal" value={rate} onChange={e=>setRate(e.target.value)} /></label><label>Cloudflare API adresi <span className="hint">Test sırasında boş bırak. Üretimde workers.dev veya özel alan adı kullanılacak.</span><input value={base} onChange={e=>setBase(e.target.value)} placeholder="https://hal-takip....workers.dev" /></label><label>Erişim anahtarı <span className="hint">Üretimde Cloudflare HAL_API_KEY secret ile aynı olmalı.</span><input type="password" value={key} onChange={e=>setKey(e.target.value)} /></label><button className="primary full" onClick={()=>onSave(Number(rate)||8,base,key)}>Kaydet</button><div className="settings-actions"><button className="ghost" onClick={onCsv}>CSV Dışa Aktar</button><button className="ghost" onClick={onJson}>JSON Yedekle</button><button className="ghost danger" onClick={onImport}>{previewMode?"Eski Veriyi TESTE Yükle":"Eski Google Verisini İçe Aktar"}</button></div></div></div>; }
+function SettingsModal({commissionRate,onClose,onSave,onCsv,onJson}:{commissionRate:number;onClose:()=>void;onSave:(r:number,b:string,k:string)=>void;onCsv:()=>void;onJson:()=>void}) { const cfg=getApiConfig(); const [rate,setRate]=useState(commissionRate.toString()); const [base,setBase]=useState(cfg.baseUrl); const [key,setKey]=useState(cfg.apiKey); return <div className="modal-backdrop"><div className="modal settings"><div className="modal-title"><div><small>AYARLAR</small><h3>HAL Takip v8</h3></div><button onClick={onClose}>×</button></div><label>Komisyon oranı (%)<input inputMode="decimal" value={rate} onChange={e=>setRate(e.target.value)} /></label><label>Cloudflare API adresi <span className="hint">Test sırasında boş bırak. Üretimde workers.dev veya özel alan adı kullanılacak.</span><input value={base} onChange={e=>setBase(e.target.value)} placeholder="https://hal-takip....workers.dev" /></label><label>Erişim anahtarı <span className="hint">Üretimde Cloudflare HAL_API_KEY secret ile aynı olmalı.</span><input type="password" value={key} onChange={e=>setKey(e.target.value)} /></label><button className="primary full" onClick={()=>onSave(Number(rate)||8,base,key)}>Kaydet</button><div className="settings-actions"><button className="ghost" onClick={onCsv}>CSV Dışa Aktar</button><button className="ghost" onClick={onJson}>JSON Yedekle</button></div></div></div>; }
