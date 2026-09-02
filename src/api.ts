@@ -13,9 +13,16 @@ export class ApiError extends Error {
   }
 }
 
+function sameOriginCloudflareBase() {
+  if (typeof window === "undefined") return "";
+  const host = window.location.hostname.toLowerCase();
+  if (host.endsWith(".workers.dev")) return window.location.origin;
+  return "";
+}
+
 export function getApiConfig() {
   return {
-    baseUrl: (localStorage.getItem(API_BASE_KEY) || import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, ""),
+    baseUrl: (localStorage.getItem(API_BASE_KEY) || import.meta.env.VITE_API_BASE_URL || sameOriginCloudflareBase()).replace(/\/$/, ""),
     apiKey: localStorage.getItem(API_KEY_KEY) || ""
   };
 }
