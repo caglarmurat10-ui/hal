@@ -15,6 +15,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply hal-takip-db --remote",
     "android:add": "cap add android",
     "android:sync": "npm run build:android-web && cap sync android",
+    "android:assets": "capacitor-assets generate --android --assetPath assets --iconBackgroundColor '#07111f' --iconBackgroundColorDark '#07111f' --splashBackgroundColor '#07111f' --splashBackgroundColorDark '#07111f'",
     "android:open": "cap open android"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@capacitor/android": "8.5.1",
+    "@capacitor/assets": "3.0.5",
     "@capacitor/cli": "8.5.1",
     "@cloudflare/vite-plugin": "1.54.2",
     "@cloudflare/workers-types": "5.20260831.1",
