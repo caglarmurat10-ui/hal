@@ -6,13 +6,25 @@ interface Env {
 type SaleInput = { id?: string; date?: string; kilo?: number; unitPrice?: number; commissionRate?: number; received?: number };
 const jsonHeaders = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 
-function reply(data: unknown, status = 200, extra: HeadersInit = {}) { return new Response(JSON.stringify(data), { status, headers: { ...jsonHeaders, ...extra } }); }
+function reply(data: unknown, status = 200, extra: HeadersInit = {}) {
+  const headers = new Headers(jsonHeaders);
+  new Headers(extra).forEach((value, key) => headers.set(key, value));
+  return new Response(JSON.stringify(data), { status, headers });
+}
 function corsHeaders() { return { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type, X-Hal-Key", "Access-Control-Allow-Methods": "GET, PUT, POST, PATCH, DELETE, OPTIONS" }; }
 function error(message: string, status = 400) { return reply({ error: message }, status, corsHeaders()); }
 function n(value: unknown) { const x = Number(value); return Number.isFinite(x) ? x : 0; }
 function seasonOf(date: string) { const d = new Date(`${date}T12:00:00Z`); const y = d.getUTCFullYear(); return d.getUTCMonth() + 1 >= 9 ? `${y}/${y + 1}` : `${y - 1}/${y}`; }
 function validDate(x: string) { return /^\d{4}-\d{2}-\d{2}$/.test(x) && !Number.isNaN(new Date(`${x}T12:00:00Z`).getTime()); }
 function id() { return `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`; }
+
+async function readJson<T extends object>(request: Request): Promise<T> {
+  try {
+    return await request.json<T>();
+  } catch {
+    return {} as T;
+  }
+}
 
 function mapSale(row: Record<string, unknown>) {
   return { id: String(row.id), date: String(row.date), season: String(row.season), kilo: n(row.kilo), unitPrice: n(row.unit_price), gross: n(row.gross), commissionRate: n(row.commission_rate), net: n(row.net), received: n(row.received), createdAt: String(row.created_at || ""), updatedAt: String(row.updated_at || "") };
@@ -45,7 +57,7 @@ async function getState(env: Env) {
 }
 
 async function upsertSale(request: Request, env: Env, saleId: string) {
-  const body = await request.json<SaleInput>().catch(() => ({}));
+  const body = await readJson<SaleInput>(request);
   const date = String(body.date || ""); const kilo = n(body.kilo); const unitPrice = n(body.unitPrice);
   const commissionRate = Math.min(30, Math.max(0, n(body.commissionRate ?? await getCommission(env))));
   if (!validDate(date)) return error("Geçerli bir tarih girin.");
@@ -70,7 +82,7 @@ async function deleteSale(env: Env, saleId: string) {
 }
 
 async function addPayment(request: Request, env: Env) {
-  const body = await request.json<{ amount?: number; date?: string }>().catch(() => ({}));
+  const body = await readJson<{ amount?: number; date?: string }>(request);
   const amount = n(body.amount); const date = String(body.date || "");
   if (amount <= 0) return error("Tahsilat sıfırdan büyük olmalı.");
   if (!validDate(date)) return error("Geçerli tahsilat tarihi girin.");
@@ -92,7 +104,7 @@ async function addPayment(request: Request, env: Env) {
 }
 
 async function updateSettings(request: Request, env: Env) {
-  const body = await request.json<{ commissionRate?: number }>().catch(() => ({}));
+  const body = await readJson<{ commissionRate?: number }>(request);
   const rate = n(body.commissionRate);
   if (rate < 0 || rate > 30) return error("Komisyon oranı 0-30 arasında olmalı.");
   await env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES('commission_rate',?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP").bind(String(rate)).run();
@@ -100,7 +112,7 @@ async function updateSettings(request: Request, env: Env) {
 }
 
 async function importLegacy(request: Request, env: Env) {
-  const body = await request.json<{ records?: unknown[] }>().catch(() => ({}));
+  const body = await readJson<{ records?: unknown[] }>(request);
   if (!Array.isArray(body.records) || body.records.length > 5000) return error("Geçersiz içe aktarma paketi.");
   const defaultRate = await getCommission(env); const statements: D1PreparedStatement[] = []; let imported = 0;
   for (const raw of body.records) {
