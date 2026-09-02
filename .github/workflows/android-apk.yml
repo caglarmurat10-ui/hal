@@ -7,6 +7,8 @@ on:
     paths:
       - "src/**"
       - "public/**"
+      - "worker/**"
+      - "vite.android.config.ts"
       - "capacitor.config.ts"
       - "package.json"
       - ".github/workflows/android-apk.yml"
@@ -14,6 +16,7 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -22,10 +25,12 @@ jobs:
         with:
           node-version: 24
       - run: npm install
-      - name: Build web assets
+      - name: TypeScript check
+        run: npm run typecheck
+      - name: Build Android web assets
         env:
           VITE_API_BASE_URL: ${{ vars.HAL_API_BASE_URL }}
-        run: npm run build:web
+        run: npm run build:android-web
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
