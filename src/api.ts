@@ -27,6 +27,7 @@ export function saveApiConfig(baseUrl: string, apiKey: string) {
 
 function urlFor(path: string) {
   const { baseUrl } = getApiConfig();
+  if (!baseUrl) throw new ApiError("Cloudflare sunucu adresi henüz tanımlı değil.", 0);
   return `${baseUrl}${path}`;
 }
 
