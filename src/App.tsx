@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { ApiError, api, flushQueue, getApiConfig, readCachedState, readQueue, saveApiConfig, writeCachedState, writeQueue } from "./api";
 import type { AppState, PendingOperation, Sale } from "./types";
 
-const LEGACY_URL = "https://script.google.com/macros/s/AKfycbz1juixEOJWvZHcqjEQ222L3jc6LpiHIKiP_TnObZifz_losMyNN776UVz_T2mMQ03j/exec";
 const emptyState: AppState = { sales: [], payments: [], commissionRate: 8, serverTime: "" };
 
 type Modal = "sale" | "payment" | "settings" | null;
@@ -44,6 +43,7 @@ export default function App() {
     } catch (e) {
       if (e instanceof ApiError && (e.status === 401 || e.status === 503)) setStatus("auth");
       else setStatus("offline");
+      if (e instanceof ApiError && e.status >= 400 && e.status < 500) setNotice(e.message);
     }
   }
 
@@ -83,6 +83,10 @@ export default function App() {
     const gross = input.kilo * input.unitPrice;
     const net = gross * (1 - rate / 100);
     const existing = editing;
+    if (existing && existing.received > net + 0.01) {
+      setNotice("Yeni net tutar, bu satış için daha önce tahsil edilmiş tutardan düşük olamaz.");
+      return;
+    }
     const sale: Sale = {
       id: existing?.id || newId(), date: input.date, season: seasonOf(input.date), kilo: input.kilo,
       unitPrice: input.unitPrice, gross, commissionRate: rate, net, received: existing?.received || 0
@@ -93,6 +97,10 @@ export default function App() {
   }
 
   async function deleteSale(sale: Sale) {
+    if (sale.received > 0.01) {
+      setNotice("Tahsilat bağlanmış bir satış silinemez. Muhasebe geçmişini korumak için önce ilgili tahsilatın ters kaydı gerekir.");
+      return;
+    }
     if (!confirm(`${new Date(`${sale.date}T12:00:00`).toLocaleDateString("tr-TR")} tarihli kayıt silinsin mi?`)) return;
     await enqueue({ id: newId(), type: "delete-sale", payload: { id: sale.id } }, { ...state, sales: state.sales.filter(x => x.id !== sale.id) });
   }
@@ -107,8 +115,9 @@ export default function App() {
       if (take > 0) { sale.received += take; rem -= take; }
       if (rem <= 0.001) break;
     }
+    const paymentId = newId();
     setModal(null);
-    await enqueue({ id: newId(), type: "payment", payload: { amount, date } }, { ...state, sales });
+    await enqueue({ id: paymentId, type: "payment", payload: { paymentId, amount, date } }, { ...state, sales });
   }
 
   function editSale(sale: Sale) { setEditing(sale); setModal("sale"); }
@@ -123,12 +132,9 @@ export default function App() {
 
   async function importLegacy() {
     if (!confirm("Eski Google HAL kayıtları Cloudflare veritabanına içe aktarılsın mı? Aynı ID'ler güncellenir, çift kayıt oluşmaz.")) return;
-    setNotice("Eski kayıtlar okunuyor...");
+    setNotice("Eski kayıtlar Cloudflare üzerinden okunuyor...");
     try {
-      const res = await fetch(`${LEGACY_URL}?t=${Date.now()}`);
-      const records = await res.json();
-      if (!Array.isArray(records)) throw new Error("Geçersiz eski veri");
-      const result = await api.importLegacy(records);
+      const result = await api.importLegacyFromCloud();
       setNotice(`${result.imported} kayıt içe aktarıldı.`);
       await sync();
     } catch (e) { setNotice(`İçe aktarma başarısız: ${e instanceof Error ? e.message : "Bilinmeyen hata"}`); }
