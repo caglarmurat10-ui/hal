@@ -2,8 +2,8 @@ import type { AppState, PendingOperation, Sale } from "./types";
 
 const API_BASE_KEY = "hal_api_base_url";
 const API_KEY_KEY = "hal_api_key";
-const CACHE_KEY = "hal_state_v8";
-const QUEUE_KEY = "hal_queue_v8";
+const CACHE_KEY = "hal_state_v8_clean";
+const QUEUE_KEY = "hal_queue_v8_clean";
 
 export class ApiError extends Error {
   status: number;
@@ -48,8 +48,7 @@ export const api = {
   upsertSale: (sale: Sale) => apiFetch<{ sale: Sale }>(`/api/sales/${encodeURIComponent(sale.id)}`, { method: "PUT", body: JSON.stringify(sale) }),
   deleteSale: (id: string) => apiFetch<{ success: true }>(`/api/sales/${encodeURIComponent(id)}`, { method: "DELETE" }),
   payment: (paymentId: string, amount: number, date: string) => apiFetch<{ success: true; duplicate?: boolean }>("/api/payments", { method: "POST", body: JSON.stringify({ paymentId, amount, date }) }),
-  settings: (commissionRate: number) => apiFetch<{ success: true }>("/api/settings", { method: "PATCH", body: JSON.stringify({ commissionRate }) }),
-  importLegacyFromCloud: () => apiFetch<{ success: true; imported: number }>("/api/import/legacy-cloud", { method: "POST", body: "{}" })
+  settings: (commissionRate: number) => apiFetch<{ success: true }>("/api/settings", { method: "PATCH", body: JSON.stringify({ commissionRate }) })
 };
 
 export function readCachedState(): AppState | null {
