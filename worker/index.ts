@@ -4,6 +4,8 @@ interface Env {
 }
 
 type SaleInput = { id?: string; date?: string; kilo?: number; unitPrice?: number; commissionRate?: number; received?: number };
+type PaymentInput = { paymentId?: string; amount?: number; date?: string };
+const LEGACY_URL = "https://script.google.com/macros/s/AKfycbz1juixEOJWvZHcqjEQ222L3jc6LpiHIKiP_TnObZifz_losMyNN776UVz_T2mMQ03j/exec";
 const jsonHeaders = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 
 function reply(data: unknown, status = 200, extra: HeadersInit = {}) {
@@ -17,13 +19,10 @@ function n(value: unknown) { const x = Number(value); return Number.isFinite(x) 
 function seasonOf(date: string) { const d = new Date(`${date}T12:00:00Z`); const y = d.getUTCFullYear(); return d.getUTCMonth() + 1 >= 9 ? `${y}/${y + 1}` : `${y - 1}/${y}`; }
 function validDate(x: string) { return /^\d{4}-\d{2}-\d{2}$/.test(x) && !Number.isNaN(new Date(`${x}T12:00:00Z`).getTime()); }
 function id() { return `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`; }
+function validId(value: string) { return /^[A-Za-z0-9._-]{6,120}$/.test(value); }
 
 async function readJson<T extends object>(request: Request): Promise<T> {
-  try {
-    return await request.json<T>();
-  } catch {
-    return {} as T;
-  }
+  try { return await request.json<T>(); } catch { return {} as T; }
 }
 
 function mapSale(row: Record<string, unknown>) {
@@ -57,6 +56,7 @@ async function getState(env: Env) {
 }
 
 async function upsertSale(request: Request, env: Env, saleId: string) {
+  if (!validId(saleId)) return error("Geçersiz kayıt kimliği.");
   const body = await readJson<SaleInput>(request);
   const date = String(body.date || ""); const kilo = n(body.kilo); const unitPrice = n(body.unitPrice);
   const commissionRate = Math.min(30, Math.max(0, n(body.commissionRate ?? await getCommission(env))));
@@ -75,32 +75,72 @@ async function upsertSale(request: Request, env: Env, saleId: string) {
 }
 
 async function deleteSale(env: Env, saleId: string) {
-  const found = await env.DB.prepare("SELECT id FROM sales WHERE id=? AND deleted_at IS NULL").bind(saleId).first();
+  if (!validId(saleId)) return error("Geçersiz kayıt kimliği.");
+  const found = await env.DB.prepare("SELECT id,received FROM sales WHERE id=? AND deleted_at IS NULL").bind(saleId).first<{ id: string; received: number }>();
   if (!found) return error("Kayıt bulunamadı.", 404);
+  if (n(found.received) > 0.01) return error("Tahsilat bağlanmış satış silinemez.", 409);
   await env.DB.prepare("UPDATE sales SET deleted_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(saleId).run();
   return reply({ success: true }, 200, corsHeaders());
 }
 
+async function acquireLock(env: Env, name: string, owner: string) {
+  const result = await env.DB.prepare(`UPDATE operation_locks
+    SET owner=?, expires_at=datetime('now','+30 seconds')
+    WHERE name=? AND (owner IS NULL OR expires_at IS NULL OR expires_at<=CURRENT_TIMESTAMP)`)
+    .bind(owner, name).run();
+  return Number(result.meta.changes || 0) === 1;
+}
+
+async function releaseLock(env: Env, name: string, owner: string) {
+  await env.DB.prepare("UPDATE operation_locks SET owner=NULL,expires_at=NULL WHERE name=? AND owner=?").bind(name, owner).run();
+}
+
+async function existingPayment(env: Env, paymentId: string) {
+  return env.DB.prepare("SELECT id,date,amount FROM payments WHERE id=?").bind(paymentId).first<{ id: string; date: string; amount: number }>();
+}
+
 async function addPayment(request: Request, env: Env) {
-  const body = await readJson<{ amount?: number; date?: string }>(request);
-  const amount = n(body.amount); const date = String(body.date || "");
+  const body = await readJson<PaymentInput>(request);
+  const paymentId = String(body.paymentId || ""); const amount = n(body.amount); const date = String(body.date || "");
+  if (!validId(paymentId)) return error("Geçersiz tahsilat kimliği.");
   if (amount <= 0) return error("Tahsilat sıfırdan büyük olmalı.");
   if (!validDate(date)) return error("Geçerli tahsilat tarihi girin.");
-  const debtRows = await env.DB.prepare("SELECT id,net,received FROM sales WHERE deleted_at IS NULL AND net-received>0.009 ORDER BY date ASC,created_at ASC").all<{ id: string; net: number; received: number }>();
-  const totalDebt = debtRows.results.reduce((s,x)=>s+n(x.net)-n(x.received),0);
-  if (amount > totalDebt + 0.01) return error("Tahsilat kalan bakiyeden büyük olamaz.", 409);
-  const paymentId = id(); let remaining = amount; const statements: D1PreparedStatement[] = [env.DB.prepare("INSERT INTO payments(id,date,amount,created_at) VALUES(?,?,?,CURRENT_TIMESTAMP)").bind(paymentId,date,amount)];
-  for (const sale of debtRows.results) {
-    if (remaining <= 0.001) break;
-    const debt = Math.max(0,n(sale.net)-n(sale.received)); const take = Math.min(debt,remaining);
-    if (take > 0) {
-      statements.push(env.DB.prepare("UPDATE sales SET received=received+?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(take,sale.id));
-      statements.push(env.DB.prepare("INSERT INTO payment_allocations(payment_id,sale_id,amount) VALUES(?,?,?)").bind(paymentId,sale.id,take));
-      remaining -= take;
-    }
+
+  const previous = await existingPayment(env, paymentId);
+  if (previous) {
+    if (previous.date !== date || Math.abs(n(previous.amount) - amount) > 0.01) return error("Tahsilat kimliği farklı veriyle daha önce kullanılmış.", 409);
+    return reply({ success: true, paymentId, duplicate: true }, 200, corsHeaders());
   }
-  await env.DB.batch(statements);
-  return reply({ success: true, paymentId }, 200, corsHeaders());
+
+  const owner = crypto.randomUUID();
+  if (!await acquireLock(env, "payment", owner)) return error("Başka bir tahsilat işleniyor. Kısa süre sonra tekrar deneyin.", 409);
+  try {
+    const afterLock = await existingPayment(env, paymentId);
+    if (afterLock) {
+      if (afterLock.date !== date || Math.abs(n(afterLock.amount) - amount) > 0.01) return error("Tahsilat kimliği farklı veriyle daha önce kullanılmış.", 409);
+      return reply({ success: true, paymentId, duplicate: true }, 200, corsHeaders());
+    }
+
+    const debtRows = await env.DB.prepare("SELECT id,net,received FROM sales WHERE deleted_at IS NULL AND net-received>0.009 ORDER BY date ASC,created_at ASC").all<{ id: string; net: number; received: number }>();
+    const totalDebt = debtRows.results.reduce((s,x)=>s+n(x.net)-n(x.received),0);
+    if (amount > totalDebt + 0.01) return error("Tahsilat kalan bakiyeden büyük olamaz.", 409);
+
+    let remaining = amount;
+    const statements: D1PreparedStatement[] = [env.DB.prepare("INSERT INTO payments(id,date,amount,created_at) VALUES(?,?,?,CURRENT_TIMESTAMP)").bind(paymentId,date,amount)];
+    for (const sale of debtRows.results) {
+      if (remaining <= 0.001) break;
+      const debt = Math.max(0,n(sale.net)-n(sale.received)); const take = Math.min(debt,remaining);
+      if (take > 0) {
+        statements.push(env.DB.prepare("UPDATE sales SET received=received+?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(take,sale.id));
+        statements.push(env.DB.prepare("INSERT INTO payment_allocations(payment_id,sale_id,amount) VALUES(?,?,?)").bind(paymentId,sale.id,take));
+        remaining -= take;
+      }
+    }
+    await env.DB.batch(statements);
+    return reply({ success: true, paymentId }, 200, corsHeaders());
+  } finally {
+    await releaseLock(env, "payment", owner).catch(() => undefined);
+  }
 }
 
 async function updateSettings(request: Request, env: Env) {
@@ -111,15 +151,15 @@ async function updateSettings(request: Request, env: Env) {
   return reply({ success: true }, 200, corsHeaders());
 }
 
-async function importLegacy(request: Request, env: Env) {
-  const body = await readJson<{ records?: unknown[] }>(request);
-  if (!Array.isArray(body.records) || body.records.length > 5000) return error("Geçersiz içe aktarma paketi.");
+async function importLegacyRecords(records: unknown[], env: Env) {
+  if (records.length > 5000) throw new Error("Çok fazla eski kayıt gönderildi.");
   const defaultRate = await getCommission(env); const statements: D1PreparedStatement[] = []; let imported = 0;
-  for (const raw of body.records) {
+  for (const raw of records) {
     if (!raw || typeof raw !== "object") continue;
     const x = raw as Record<string, unknown>; const date = String(x.date || "").split("T")[0]; const kilo = n(x.kilo ?? x.quantity); const net = n(x.net ?? x.netAmount); const received = Math.max(0,n(x.received));
     if (!validDate(date) || kilo <= 0 || net <= 0) continue;
-    const saleId = String(x.id || id()); const rate = Math.min(30,Math.max(0,n(x.commissionRate ?? defaultRate))); const gross = rate < 100 ? net / (1-rate/100) : net; const unitPrice = kilo ? gross/kilo : 0;
+    const saleId = String(x.id || id()); if (!validId(saleId)) continue;
+    const rate = Math.min(30,Math.max(0,n(x.commissionRate ?? defaultRate))); const gross = rate < 100 ? net / (1-rate/100) : net; const unitPrice = kilo ? gross/kilo : 0;
     statements.push(env.DB.prepare(`INSERT INTO sales(id,date,season,kilo,unit_price,gross,commission_rate,net,received,created_at,updated_at,deleted_at)
       VALUES(?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,NULL)
       ON CONFLICT(id) DO UPDATE SET date=excluded.date,season=excluded.season,kilo=excluded.kilo,unit_price=excluded.unit_price,gross=excluded.gross,commission_rate=excluded.commission_rate,net=excluded.net,received=excluded.received,updated_at=CURRENT_TIMESTAMP,deleted_at=NULL`)
@@ -127,6 +167,25 @@ async function importLegacy(request: Request, env: Env) {
     imported++;
   }
   for (let i=0;i<statements.length;i+=100) await env.DB.batch(statements.slice(i,i+100));
+  return imported;
+}
+
+async function importLegacy(request: Request, env: Env) {
+  const body = await readJson<{ records?: unknown[] }>(request);
+  if (!Array.isArray(body.records)) return error("Geçersiz içe aktarma paketi.");
+  const imported = await importLegacyRecords(body.records, env);
+  return reply({ success:true, imported },200,corsHeaders());
+}
+
+async function importLegacyFromCloud(env: Env) {
+  const response = await fetch(`${LEGACY_URL}?t=${Date.now()}`, {
+    headers: { "Accept": "application/json" },
+    signal: AbortSignal.timeout(15_000)
+  });
+  if (!response.ok) return error(`Eski veri sunucusu ${response.status} yanıtı verdi.`, 502);
+  const records = await response.json<unknown>();
+  if (!Array.isArray(records)) return error("Eski veri sunucusu beklenmeyen format döndürdü.", 502);
+  const imported = await importLegacyRecords(records, env);
   return reply({ success:true, imported },200,corsHeaders());
 }
 
@@ -144,6 +203,7 @@ export default {
       if (url.pathname === "/api/payments" && request.method === "POST") return addPayment(request,env);
       if (url.pathname === "/api/settings" && request.method === "PATCH") return updateSettings(request,env);
       if (url.pathname === "/api/import/legacy" && request.method === "POST") return importLegacy(request,env);
+      if (url.pathname === "/api/import/legacy-cloud" && request.method === "POST") return importLegacyFromCloud(env);
       return error("API yolu bulunamadı.",404);
     } catch (e) {
       console.error("HAL API error", e instanceof Error ? e.message : e);
