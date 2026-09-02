@@ -8,6 +8,7 @@ on:
       - "src/**"
       - "public/**"
       - "worker/**"
+      - "migrations/**"
       - "vite.android.config.ts"
       - "capacitor.config.ts"
       - "package.json"
@@ -25,6 +26,8 @@ jobs:
         with:
           node-version: 24
       - run: npm install
+      - name: Runtime dependency audit
+        run: npm audit --omit=dev --audit-level=high
       - name: TypeScript check
         run: npm run typecheck
       - name: Build Android web assets
