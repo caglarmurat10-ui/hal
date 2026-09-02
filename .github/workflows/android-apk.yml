@@ -9,6 +9,7 @@ on:
       - "public/**"
       - "worker/**"
       - "migrations/**"
+      - "wrangler.jsonc"
       - "vite.android.config.ts"
       - "capacitor.config.ts"
       - "package.json"
@@ -30,6 +31,12 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - name: TypeScript check
         run: npm run typecheck
+      - name: Validate D1 migrations locally
+        run: |
+          cp wrangler.jsonc wrangler.ci.jsonc
+          sed -i 's/REPLACE_WITH_D1_DATABASE_ID/00000000-0000-0000-0000-000000000000/' wrangler.ci.jsonc
+          npx wrangler d1 migrations apply hal-takip-db --local --config wrangler.ci.jsonc
+          rm -f wrangler.ci.jsonc
       - name: Build Android web assets
         env:
           VITE_API_BASE_URL: ${{ vars.HAL_API_BASE_URL }}
