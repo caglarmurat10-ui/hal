@@ -1,9 +1,11 @@
+import { Capacitor } from "@capacitor/core";
 import type { AppState, PendingOperation, Sale } from "./types";
 
 const API_BASE_KEY = "hal_api_base_url";
 const API_KEY_KEY = "hal_api_key";
 const CACHE_KEY = "hal_state_v8_clean";
 const QUEUE_KEY = "hal_queue_v8_clean";
+const PRODUCTION_API_BASE = "https://hal-takip.caglarmurat10.workers.dev";
 
 export class ApiError extends Error {
   status: number;
@@ -13,7 +15,8 @@ export class ApiError extends Error {
   }
 }
 
-function sameOriginCloudflareBase() {
+function automaticApiBase() {
+  if (Capacitor.isNativePlatform()) return PRODUCTION_API_BASE;
   if (typeof window === "undefined") return "";
   const host = window.location.hostname.toLowerCase();
   if (host.endsWith(".workers.dev")) return window.location.origin;
@@ -22,7 +25,7 @@ function sameOriginCloudflareBase() {
 
 export function getApiConfig() {
   return {
-    baseUrl: (localStorage.getItem(API_BASE_KEY) || import.meta.env.VITE_API_BASE_URL || sameOriginCloudflareBase()).replace(/\/$/, ""),
+    baseUrl: (localStorage.getItem(API_BASE_KEY) || import.meta.env.VITE_API_BASE_URL || automaticApiBase()).replace(/\/$/, ""),
     apiKey: localStorage.getItem(API_KEY_KEY) || ""
   };
 }
