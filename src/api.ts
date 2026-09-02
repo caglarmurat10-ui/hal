@@ -46,9 +46,9 @@ export const api = {
   state: () => apiFetch<AppState>("/api/state"),
   upsertSale: (sale: Sale) => apiFetch<{ sale: Sale }>(`/api/sales/${encodeURIComponent(sale.id)}`, { method: "PUT", body: JSON.stringify(sale) }),
   deleteSale: (id: string) => apiFetch<{ success: true }>(`/api/sales/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  payment: (amount: number, date: string) => apiFetch<{ success: true }>("/api/payments", { method: "POST", body: JSON.stringify({ amount, date }) }),
+  payment: (paymentId: string, amount: number, date: string) => apiFetch<{ success: true; duplicate?: boolean }>("/api/payments", { method: "POST", body: JSON.stringify({ paymentId, amount, date }) }),
   settings: (commissionRate: number) => apiFetch<{ success: true }>("/api/settings", { method: "PATCH", body: JSON.stringify({ commissionRate }) }),
-  importLegacy: (records: unknown[]) => apiFetch<{ success: true; imported: number }>("/api/import/legacy", { method: "POST", body: JSON.stringify({ records }) })
+  importLegacyFromCloud: () => apiFetch<{ success: true; imported: number }>("/api/import/legacy-cloud", { method: "POST", body: "{}" })
 };
 
 export function readCachedState(): AppState | null {
@@ -73,7 +73,7 @@ export async function flushQueue(queue: PendingOperation[]): Promise<PendingOper
     const op = remaining[0];
     if (op.type === "upsert-sale") await api.upsertSale(op.payload);
     if (op.type === "delete-sale") await api.deleteSale(op.payload.id);
-    if (op.type === "payment") await api.payment(op.payload.amount, op.payload.date);
+    if (op.type === "payment") await api.payment(op.payload.paymentId, op.payload.amount, op.payload.date);
     if (op.type === "settings") await api.settings(op.payload.commissionRate);
     remaining.shift();
     writeQueue(remaining);
