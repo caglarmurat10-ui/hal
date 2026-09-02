@@ -109,12 +109,13 @@ $apiKey | npx wrangler secret put HAL_API_KEY
 if ($LASTEXITCODE -ne 0) { Fail "HAL_API_KEY yuklenemedi." }
 
 Write-Host "`n== Worker deploy ediliyor ==" -ForegroundColor Cyan
-$deployOutput = (& npm run deploy 2>&1 | Out-String)
-if ($LASTEXITCODE -ne 0) {
-  Write-Host $deployOutput
-  Fail "Worker deploy basarisiz oldu."
-}
+# Windows PowerShell, native stderr satirlarini ErrorRecord olarak yorumlayabilir.
+# npm/wrangler uyarilarini cmd.exe icinde stdout'a birlestirerek gercek cikis kodunu koruyoruz.
+$deployLines = & cmd.exe /d /s /c "npm run deploy 2^>^&1"
+$deployExit = $LASTEXITCODE
+$deployOutput = ($deployLines | Out-String)
 Write-Host $deployOutput
+if ($deployExit -ne 0) { Fail "Worker deploy basarisiz oldu (exit $deployExit)." }
 
 $match = [regex]::Match($deployOutput, 'https://[A-Za-z0-9.-]+\.workers\.dev')
 $workerUrl = if ($match.Success) { $match.Value.TrimEnd('/') } else { "" }
@@ -127,6 +128,8 @@ if ($workerUrl) {
   } catch {
     Write-Host "Worker deploy edildi ancak otomatik health kontrolu basarisiz: $($_.Exception.Message)" -ForegroundColor Yellow
   }
+} else {
+  Write-Host "Worker URL otomatik bulunamadi; wrangler deploy ciktisini kontrol edin." -ForegroundColor Yellow
 }
 
 $localInfoPath = Join-Path $root ".hal-cloudflare.local.txt"
