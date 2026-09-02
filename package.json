@@ -1,28 +1,35 @@
 {
-  "name": "hal-app",
-  "version": "0.1.0",
+  "name": "hal-takip",
+  "version": "8.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "vite dev",
+    "build": "tsc -b && vite build",
+    "build:web": "vite build",
+    "preview": "npm run build:web && vite preview",
+    "deploy": "npm run build && wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply hal-takip-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply hal-takip-db --remote",
+    "android:add": "cap add android",
+    "android:sync": "npm run build:web && cap sync android",
+    "android:open": "cap open android"
   },
   "dependencies": {
-    "clsx": "^2.1.1",
-    "next": "16.1.6",
+    "@capacitor/core": "8.5.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "tailwind-merge": "^3.4.0"
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "@capacitor/android": "8.5.1",
+    "@capacitor/cli": "8.5.1",
+    "@cloudflare/vite-plugin": "1.54.2",
+    "@cloudflare/workers-types": "^4.20260901.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "^5.9.2",
+    "vite": "8.2.2",
+    "wrangler": "4.127.1"
   }
 }

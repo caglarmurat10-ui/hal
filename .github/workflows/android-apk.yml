@@ -1,0 +1,42 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["agent/cloudflare-mobile-rebuild"]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "capacitor.config.ts"
+      - "package.json"
+      - ".github/workflows/android-apk.yml"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm install
+      - name: Build web assets
+        env:
+          VITE_API_BASE_URL: ${{ vars.HAL_API_BASE_URL }}
+        run: npm run build:web
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Generate Android project
+        run: npx cap add android && npx cap sync android
+      - name: Build installable debug APK
+        run: cd android && chmod +x gradlew && ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HAL-Takip-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
