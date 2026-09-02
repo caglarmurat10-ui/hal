@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, api, flushQueue, getApiConfig, readCachedState, readQueue, saveApiConfig, writeCachedState, writeQueue } from "./api";
 import type { AppState, PendingOperation, Sale } from "./types";
+import SeasonAnalysis from "./SeasonAnalysis";
 
 const emptyState: AppState = { sales: [], payments: [], commissionRate: 8, serverTime: "" };
 
@@ -166,6 +167,8 @@ export default function App() {
       <section className="season-strip">
         {seasons.map(s => { const items = state.sales.filter(x => x.season === s); const net = items.reduce((a,b)=>a+b.net,0); const kg = items.reduce((a,b)=>a+b.kilo,0); return <button key={s} onClick={() => setSeasonFilter(s)} className={seasonFilter===s ? "season-card active" : "season-card"}><small>{s} SEZONU</small><b>{money(net)}</b><span>{number(kg,1)} kg satış</span></button>; })}
       </section>
+
+      <SeasonAnalysis sales={state.sales} seasons={seasons} seasonFilter={seasonFilter} onSelectSeason={setSeasonFilter} />
 
       <section className="actions">
         <button className="primary" onClick={() => { setEditing(null); setModal("sale"); }}>＋ Satış Ekle</button>
