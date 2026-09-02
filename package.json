@@ -11,6 +11,7 @@
     "build:android-web": "vite build --config vite.android.config.ts",
     "preview": "npm run build:web && vite preview",
     "deploy": "npm run build && wrangler deploy",
+    "cloudflare:bootstrap": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/cloudflare-bootstrap.ps1",
     "db:migrate:local": "wrangler d1 migrations apply hal-takip-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply hal-takip-db --remote",
     "android:add": "cap add android",
@@ -31,7 +32,6 @@
     "@cloudflare/workers-types": "5.20260831.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "@vitejs/plugin-react": "6.1.1",
     "typescript": "^5.9.2",
     "vite": "8.2.2",
     "wrangler": "4.127.1"
