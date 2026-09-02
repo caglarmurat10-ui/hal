@@ -29,5 +29,5 @@ export type AppState = {
 export type PendingOperation =
   | { id: string; type: "upsert-sale"; payload: Sale }
   | { id: string; type: "delete-sale"; payload: { id: string } }
-  | { id: string; type: "payment"; payload: { amount: number; date: string } }
+  | { id: string; type: "payment"; payload: { paymentId: string; amount: number; date: string } }
   | { id: string; type: "settings"; payload: { commissionRate: number } };
