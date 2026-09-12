@@ -1,0 +1,15 @@
+{
+  "protocol": "savarona-agent/0.1",
+  "project_id": "hal",
+  "name": "HAL Takip",
+  "environment": "production",
+  "version_source": "git",
+  "health_url": "https://hal-takip.caglarmurat10.workers.dev/api/health",
+  "capabilities": ["repo", "health", "errors"],
+  "risk_profile": "normal",
+  "automation": {
+    "read_only": "automatic",
+    "low_risk_changes": "branch_test_pr",
+    "high_risk_changes": "human_approval_required"
+  }
+}
